@@ -153,7 +153,19 @@ fun LauncherScreen(
                     belowName = { if (art != null) ArtCard(art.artwork) },
                 )
                 Spacer(Modifier.weight(1f))
-                Hero(focus, fallback = apps.firstOrNull(), hidden = hidden, greeting = greeting)
+                Column {
+                    heroLine?.let {
+                        Text(
+                            it.uppercase(),
+                            fontFamily = palette.data,
+                            fontSize = 16.sp,
+                            letterSpacing = 3.sp,
+                            color = palette.accent,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                    }
+                    Hero(focus, fallback = apps.firstOrNull(), hidden = hidden, greeting = greeting)
+                }
                 Spacer(Modifier.height(20.dp))
                 Box(
                     Modifier.onGloballyPositioned {
