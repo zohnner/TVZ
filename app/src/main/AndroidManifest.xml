@@ -74,6 +74,18 @@
                 android:resource="@xml/home_redirect_service" />
         </service>
 
+        <!-- Resume tiles: reads media sessions. Notification access was granted to this exact
+             component name on the TV; renaming the class loses it. -->
+        <service
+            android:name=".ResumeProbeListener"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
     </application>
 
 </manifest>

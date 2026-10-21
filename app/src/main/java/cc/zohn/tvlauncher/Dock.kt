@@ -83,6 +83,12 @@ sealed interface DockItem {
         override val key get() = input.hiddenKey
         override val title get() = input.title
     }
+
+    /** The last thing watched in [app]; OK opens the app (no deep link exists). */
+    data class Resume(val entry: ResumeEntry, val app: AppEntry) : DockItem {
+        override val key get() = "resume:${app.packageName}"
+        override val title get() = entry.title ?: app.label
+    }
 }
 
 /**
@@ -119,6 +125,7 @@ fun Dock(
                 when (item) {
                     is DockItem.App -> AppTileContent(item.app)
                     is DockItem.Input -> InputTileContent(item.input, focused)
+                    is DockItem.Resume -> ResumeTileContent(item)
                 }
             }
         }
@@ -235,6 +242,49 @@ private fun AppTileContent(app: AppEntry) {
         Image(app.image, app.label, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
     } else {
         Image(app.image, app.label, Modifier.fillMaxHeight(0.62f).aspectRatio(1f))
+    }
+}
+
+// Zohn's pick, "App banner + overlay": the app's banner under a palette-tinted veil, then the
+// RESUME label, the title, and progress (a bar when the duration is known, else "12 min in").
+@Composable
+private fun BoxScope.ResumeTileContent(item: DockItem.Resume) {
+    val palette = LocalPalette.current
+    AppTileContent(item.app)
+    Box(Modifier.fillMaxSize().background(palette.background.copy(alpha = 0.66f)))
+    Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp)) {
+        Text(
+            "▶ RESUME",
+            fontFamily = palette.data,
+            fontSize = 12.sp,
+            letterSpacing = 2.sp,
+            color = palette.glow,
+            maxLines = 1,
+        )
+        Text(
+            item.title,
+            fontFamily = palette.display,
+            fontSize = 18.sp,
+            color = palette.text,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        val duration = item.entry.durationMs
+        if (duration != null) {
+            Spacer(Modifier.height(6.dp))
+            val progress = (item.entry.positionMs.toFloat() / duration).coerceIn(0f, 1f)
+            Box(Modifier.fillMaxWidth().height(3.dp).background(palette.accent.copy(alpha = 0.3f))) {
+                Box(Modifier.fillMaxWidth(progress).fillMaxHeight().background(palette.glow))
+            }
+        } else {
+            Text(
+                resumePosition(item.entry.positionMs),
+                fontFamily = palette.data,
+                fontSize = 12.sp,
+                color = palette.text.copy(alpha = 0.7f),
+                maxLines = 1,
+            )
+        }
     }
 }
 

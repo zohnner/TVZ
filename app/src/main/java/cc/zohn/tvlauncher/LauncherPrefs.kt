@@ -1,8 +1,15 @@
 package cc.zohn.tvlauncher
 
 import android.content.Context
+import android.content.SharedPreferences
+import android.util.Log
+import org.json.JSONArray
+import org.json.JSONException
+import org.json.JSONObject
 
 private const val KEY_HIDDEN = "hidden"
+private const val KEY_RESUMES = "resumes"
+private const val KEY_NEVER_TRACK = "neverTrack"
 private const val KEY_PACKAGE_SEQ = "pkgSeq"
 private const val KEY_BOOT_COUNT = "bootCount"
 private const val KEY_PROFILE = "profile"
@@ -40,6 +47,37 @@ class LauncherPrefs(context: Context) {
         prefs.edit().putInt(key, prefs.getInt(key, 0) + 1).apply()
     }
 
+    // Resume tiles: the last thing watched per app (written by ResumeProbeListener), as JSON.
+    fun resumes(profile: Profile): List<ResumeEntry> =
+        decodeResumes(prefs.getString(key(profile, KEY_RESUMES), null))
+
+    fun recordResume(profile: Profile, entry: ResumeEntry) = setResumes(profile, upsert(resumes(profile), entry))
+
+    fun dismissResume(profile: Profile, packageName: String) =
+        setResumes(profile, resumes(profile).filter { it.packageName != packageName })
+
+    // Apps the profile never wants a Resume tile for (nothing is recorded for them either).
+    fun neverTrack(profile: Profile): Set<String> =
+        prefs.getStringSet(key(profile, KEY_NEVER_TRACK), emptySet())!!.toSet()
+
+    fun addNeverTrack(profile: Profile, packageName: String) {
+        prefs.edit().putStringSet(key(profile, KEY_NEVER_TRACK), neverTrack(profile) + packageName).apply()
+        dismissResume(profile, packageName)
+    }
+
+    /** Whether a changed key affects any profile's Resume tiles. */
+    fun isResumeKey(changed: String?): Boolean =
+        changed != null && listOf(KEY_RESUMES, KEY_NEVER_TRACK).any { changed == it || changed.endsWith(":$it") }
+
+    fun registerListener(listener: SharedPreferences.OnSharedPreferenceChangeListener) =
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+
+    fun unregisterListener(listener: SharedPreferences.OnSharedPreferenceChangeListener) =
+        prefs.unregisterOnSharedPreferenceChangeListener(listener)
+
+    private fun setResumes(profile: Profile, list: List<ResumeEntry>) =
+        prefs.edit().putString(key(profile, KEY_RESUMES), encodeResumes(list)).apply()
+
     // Input names describe the physical port, so both profiles share them.
     fun inputName(id: String): String? = prefs.getString(INPUT_NAME_PREFIX + id, null)
 
@@ -56,4 +94,37 @@ class LauncherPrefs(context: Context) {
 
     private fun key(profile: Profile, base: String) =
         if (profile == Profile.ZOHN) base else "${profile.id}:$base"
+}
+
+private fun encodeResumes(list: List<ResumeEntry>): String =
+    JSONArray().apply {
+        for (e in list) {
+            put(JSONObject().apply {
+                put("pkg", e.packageName)
+                e.title?.let { put("title", it) }
+                put("pos", e.positionMs)
+                e.durationMs?.let { put("dur", it) }
+                put("at", e.watchedAt)
+            })
+        }
+    }.toString()
+
+private fun decodeResumes(json: String?): List<ResumeEntry> {
+    if (json == null) return emptyList()
+    return try {
+        val a = JSONArray(json)
+        (0 until a.length()).map { i ->
+            val o = a.getJSONObject(i)
+            ResumeEntry(
+                packageName = o.getString("pkg"),
+                title = if (o.has("title")) o.getString("title") else null,
+                positionMs = o.optLong("pos", 0),
+                durationMs = o.optLong("dur", 0).takeIf { it > 0 },
+                watchedAt = o.optLong("at", 0),
+            )
+        }
+    } catch (e: JSONException) {
+        Log.w("TvLauncher", "bad resume list, starting fresh", e)
+        emptyList()
+    }
 }

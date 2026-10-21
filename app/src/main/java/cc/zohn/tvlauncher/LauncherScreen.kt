@@ -66,6 +66,9 @@ class LauncherActions(
     val loadGallery: suspend (Phase) -> List<Artwork>,
     val galleryImage: suspend (Artwork) -> ImageBitmap?,
     val toggleFastDay: () -> Unit,
+    // Resume tiles, by package: drop this one / stop recording the app for this profile.
+    val dismissResume: (packageName: String) -> Unit,
+    val neverTrack: (packageName: String) -> Unit,
 )
 
 /** Today's painting for an art-focused profile, ready to draw. */
@@ -103,6 +106,7 @@ fun LauncherScreen(
     val focus = remember { FocusInfo() }
     var menuApp by remember { mutableStateOf<AppEntry?>(null) }
     var menuInput by remember { mutableStateOf<InputEntry?>(null) }
+    var menuResume by remember { mutableStateOf<DockItem.Resume?>(null) }
     var renameInput by remember { mutableStateOf<InputEntry?>(null) }
     var typeInput by remember { mutableStateOf<InputEntry?>(null) }
     var inputsOpen by remember { mutableStateOf(false) }
@@ -195,12 +199,14 @@ fun LauncherScreen(
                         when (it) {
                             is DockItem.App -> actions.launch(it.app)
                             is DockItem.Input -> actions.openInput(it.input)
+                            is DockItem.Resume -> actions.launch(it.app)
                         }
                     },
                     onMenu = {
                         when (it) {
                             is DockItem.App -> menuApp = it.app
                             is DockItem.Input -> menuInput = it.input
+                            is DockItem.Resume -> menuResume = it
                         }
                     },
                 )
@@ -240,6 +246,16 @@ fun LauncherScreen(
             },
             onInput = actions.onInput,
             onDismiss = { menuInput = null },
+        )
+    }
+    menuResume?.let { item ->
+        // Either choice removes the focused tile: put focus somewhere real.
+        ResumeMenuDialog(
+            item = item,
+            onDismissEntry = { actions.dismissResume(item.app.packageName); refocusDock++ },
+            onNeverTrack = { actions.neverTrack(item.app.packageName); refocusDock++ },
+            onInput = actions.onInput,
+            onDismiss = { menuResume = null },
         )
     }
     renameInput?.let { input ->
@@ -289,6 +305,8 @@ private fun Hero(focus: FocusInfo, dock: List<DockItem>, hidden: Set<String>, gr
                     item == null -> "Loading…"
                     item.key in hidden -> "Hidden  ·  hold OK for options"
                     item is DockItem.Input -> "${item.input.label}  ·  press OK to switch  ·  hold for options"
+                    item is DockItem.Resume ->
+                        "${resumeSubtitle(item.app.label, item.entry.positionMs)}  ·  press OK to resume  ·  hold for options"
                     else -> "Press OK to open  ·  hold for options"
                 },
                 fontFamily = palette.data,

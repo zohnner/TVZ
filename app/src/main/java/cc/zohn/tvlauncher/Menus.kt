@@ -76,6 +76,21 @@ fun AppMenuDialog(
 }
 
 @Composable
+fun ResumeMenuDialog(
+    item: DockItem.Resume,
+    onDismissEntry: () -> Unit,
+    onNeverTrack: () -> Unit,
+    onInput: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    MenuPanel(item.title, onInput, onDismiss) {
+        MenuButton("Dismiss", initialFocus = true) { onDismissEntry(); onDismiss() }
+        MenuButton("Never track ${item.app.label}") { onNeverTrack(); onDismiss() }
+        MenuButton("Cancel", onClick = onDismiss)
+    }
+}
+
+@Composable
 fun InputPickerDialog(inputs: List<InputEntry>, onPick: (InputEntry) -> Unit, onInput: () -> Unit, onDismiss: () -> Unit) {
     MenuPanel("Inputs", onInput, onDismiss) {
         inputs.forEachIndexed { index, input ->

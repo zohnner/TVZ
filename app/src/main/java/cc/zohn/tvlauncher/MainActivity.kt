@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.SharedPreferences
 import android.media.tv.TvInputManager
 import android.net.Uri
 import android.os.Bundle
@@ -49,6 +50,12 @@ class MainActivity : ComponentActivity() {
     private var inputs by mutableStateOf<List<InputEntry>>(emptyList())
     // Launch counts for the active profile, re-read when the dock is re-sorted (resume, profile switch).
     private var counts by mutableStateOf<Map<String, Int>>(emptyMap())
+    // Resume tiles for the active profile (recorded by ResumeProbeListener).
+    private var resumes by mutableStateOf<List<ResumeEntry>>(emptyList())
+    // Held in a field: SharedPreferences keeps only a weak reference to its listeners.
+    private val resumeListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (prefs.isResumeKey(key)) loadResumes()
+    }
     private var inputsJob: Job? = null
     private val inputCallback = object : TvInputManager.TvInputCallback() {
         override fun onInputAdded(inputId: String) = refreshInputs()
@@ -155,13 +162,15 @@ class MainActivity : ComponentActivity() {
                 Toast.makeText(this, if (moodClock.fastDay) "Fast day on" else "Fast day off", Toast.LENGTH_SHORT).show()
                 startMoodClock()
             },
+            dismissResume = { prefs.dismissResume(profile, it); loadResumes() },
+            neverTrack = { prefs.addNeverTrack(profile, it); loadResumes() },
         )
         val galleryIdleMs = galleryIdleMs()
         setContent {
             TvzTheme(isInDarkTheme = true) {
                 val activeOverride = themeOverride?.takeIf { it.activeAt(moodClock.now()) }
-                val dock = remember(apps, inputs, hidden, showHidden, counts) {
-                    dockItems(apps, inputs, hidden, showHidden, counts)
+                val dock = remember(apps, inputs, hidden, showHidden, counts, resumes) {
+                    dockItems(apps, inputs, hidden, showHidden, counts, resumes)
                 }
                 LauncherScreen(
                     palette = activeOverride?.palette ?: Moods.effective(profile.id, mood),
@@ -212,6 +221,7 @@ class MainActivity : ComponentActivity() {
         // Coming back from an app counts as activity: no gallery the moment you return.
         lastInputAt.longValue = SystemClock.uptimeMillis()
         counts = prefs.launchCounts(profile)
+        loadResumes()
         refresh()
         refreshInputs()
         loadArt()
@@ -219,12 +229,15 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        // The listener records while another app plays; pick up its writes while we're visible.
+        prefs.registerListener(resumeListener)
         // Plugging a device in (or powering one on) updates the tiles while the launcher is up.
         getSystemService(TvInputManager::class.java)
             ?.registerCallback(inputCallback, Handler(Looper.getMainLooper()))
     }
 
     override fun onStop() {
+        prefs.unregisterListener(resumeListener)
         getSystemService(TvInputManager::class.java)?.unregisterCallback(inputCallback)
         inputsJob?.cancel()
         // Nothing to animate while stopped; fast day is a debug aid and must not outlive the screen.
@@ -244,6 +257,7 @@ class MainActivity : ComponentActivity() {
         hidden = prefs.hidden(profile)
         showHidden = false
         counts = prefs.launchCounts(profile)
+        loadResumes()
         if (profile.artFocus) loadArt() else art = null // free the painting's memory
         showGreeting()
     }
@@ -290,16 +304,27 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // Apps and the inputs that deserve a tile, most-used first (ties alphabetical).
+    private fun loadResumes() {
+        val fresh = visibleResumes(prefs.resumes(profile), prefs.neverTrack(profile), System.currentTimeMillis())
+        if (fresh != resumes) resumes = fresh
+    }
+
+    // Resume tiles first (installed, not hidden apps only), then apps and the inputs that deserve
+    // a tile, most-used first (ties alphabetical).
     private fun dockItems(
         apps: List<AppEntry>,
         inputs: List<InputEntry>,
         hidden: Set<String>,
         showHidden: Boolean,
         counts: Map<String, Int>,
+        resumes: List<ResumeEntry>,
     ): List<DockItem> {
+        val byPackage = apps.associateBy { it.packageName }
+        val resumeItems = resumes.mapNotNull { e ->
+            byPackage[e.packageName]?.takeIf { showHidden || it.packageName !in hidden }?.let { DockItem.Resume(e, it) }
+        }
         val items = apps.map { DockItem.App(it) } + inputs.filter { it.tileVisible }.map { DockItem.Input(it) }
-        return sortedByUse(items.filter { showHidden || it.key !in hidden }, counts, { it.key }, { it.title })
+        return resumeItems + sortedByUse(items.filter { showHidden || it.key !in hidden }, counts, { it.key }, { it.title })
     }
 
     // This phase's painting for art-focused profiles; a no-op if it's already showing.
