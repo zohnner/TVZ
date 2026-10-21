@@ -1,5 +1,8 @@
 # Zohn TV — Design (decided 2026-10-20)
 
+Two profiles share one layout: **Zohn** (baroque-futurist, below) and **Sydney** (Monet's Water
+Lilies, see the end). Colors come from `LocalPalette` — never hard-code a profile's colors in UI code.
+
 **Theme:** baroque-futurist — gold on black. Cathedral ornament meets spaceship light.
 Any new visual feature: ask Zohn about style, colors and effects **before** building it.
 
@@ -47,3 +50,26 @@ The TV has a Mali-G31 GPU and 1.8 GB RAM. Measured: navigation ~24 ms/frame, GPU
 - Focus state is read only by the hero and backdrop, so moving focus doesn't recompose the screen.
 - Tile animations read state only inside `graphicsLayer` / `drawBehind` blocks.
 - A real wallpaper photo will need its own full-resolution layer (3 layers total). Budget for it.
+
+## Sydney's profile (decided 2026-10-20)
+
+**Theme:** Monet's Water Lilies, daylight pond. Light and airy; the painting is the star.
+
+| Token | Hex | Use |
+|---|---|---|
+| background | `#DCE7EE` | pale water/sky; also the mist over the painting |
+| surface | `#EEF2EC` | mist: tiles, art card, menus |
+| accent | `#6E8F7A` | sage: name, date, ornament, frames |
+| glow | `#8C7BC0` | violet: focus frame + glow |
+| secondary | `#E6A3B4` | lily pink |
+| text | `#22313A` | deep blue-grey |
+
+- Display font: **Playfair Display** (OFL, `res/font/playfair*.ttf`).
+- Wallpaper: today's painting, full-screen (Crop), from the Art Institute of Chicago's public-domain
+  Impressionists, weighted toward Monet. Same piece all day; cached for offline.
+- Mist layer (pre-rendered) over the painting: top band, a stronger patch behind the clock/date/weather,
+  a left fade behind the hero, and a bottom fade behind the dock. No app backdrop and no drift.
+- Art card under the name: italic title, ARTIST · YEAR in sage, then a 1–2 sentence fact (≤190 chars).
+- Idle gallery (after ~9.5 min untouched on the home screen): paintings shown whole (Fit) on the pale
+  background with a centered museum caption, cross-fading every 20 s. Any key exits; that key press
+  is swallowed.

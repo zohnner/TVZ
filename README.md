@@ -15,12 +15,16 @@ Working on the TV:
 - Dock sorted by most-used (launches from Zohn TV only), app list cached on disk for ~1 s cold start.
 - Hold OK (or Menu) on a tile → Hide / App info / Show hidden apps.
 - Quick-action row under the clock (press Up from the dock): Inputs (HDMI 1–3, verified switching), Wi-Fi, Bluetooth, Settings.
+- **Two profiles, Zohn and Sydney** (inside the launcher, not Google TV profiles). Switch by focusing
+  the name top-left (Up, then Left) and pressing OK. Each has its own look, most-used order and hidden
+  apps; the TV opens in whoever used it last. Sydney's is art-focused: today's Impressionist painting
+  as wallpaper, a museum-label card with a fact, and an idle gallery wall. See DESIGN.md.
 - Weather line for Kansas City, MO (°F, Open-Meteo, no key; `WEATHER_CITY` in `Weather.kt`).
 - The background drift pauses while the remote is in use and resumes after 2 s idle.
 
 Not done / open:
 - **Wallpaper** image: Zohn will supply one; a gradient placeholder is drawn in `Background.kt`.
-- **Queued: a second profile for Sydney** — art-focused (art facts, inspiring pieces), with her own most-used/hidden memory. Design questions pending with Zohn.
+- The idle gallery hasn't been watched end-to-end on the TV yet (it needs ~9.5 min of no input).
 - Navigation runs ~24 ms/frame (GPU ~8 ms); the rest is CPU. See DESIGN.md → Performance.
 
 ## Code map (`app/src/main/java/cc/zohn/tvlauncher/`)
@@ -34,11 +38,16 @@ Not done / open:
 | `Dock.kt` | App row; tile focus visuals; OK vs. hold-OK/Menu key handling |
 | `Menus.kt` | App menu and input picker dialogs |
 | `AppRepository.kt` | App discovery (`LEANBACK_LAUNCHER`), launch intents, on-disk app cache |
-| `LauncherPrefs.kt` | Hidden apps, launch counts, package-change bookkeeping |
+| `LauncherPrefs.kt` | Active profile; per-profile hidden apps + launch counts; package-change bookkeeping |
 | `TvInputs.kt` | HDMI inputs via `TvInputManager`, passthrough intents |
 | `Weather.kt` | Open-Meteo fetch + `WEATHER_CITY` setting |
 | `HomeRedirectService.kt` | Accessibility service that sends the Home button here (see below) |
-| `ui/theme/Baroque.kt` | Palette + Cinzel font |
+| `Profiles.kt` | The profiles (Zohn, Sydney): id, name, palette, art focus |
+| `Art.kt` | Art Institute of Chicago fetch: daily painting, gallery set, image cache, facts |
+| `Gallery.kt` | Sydney's idle gallery wall |
+| `Http.kt` | Shared HTTP helpers (JSON GET, file download) |
+| `ui/theme/Palette.kt` | `LauncherPalette` per profile (`LocalPalette`), Playfair font |
+| `ui/theme/Baroque.kt` | Zohn's colors + Cinzel font |
 
 ## Build & deploy
 
@@ -81,6 +90,12 @@ Stock launcher: `com.google.android.apps.tv.launcherx`.
 - **Measuring frames:** `dumpsys gfxinfo cc.zohn.tvlauncher reset`, navigate, then read the
   percentiles. Measure after AOT compile and after the TV settles; numbers right after an install
   are polluted.
+
+## Screensaver vs. Sydney's gallery
+
+The TV's own screensaver starts after `screen_off_timeout` (10 min). The gallery starts 30 s before
+that, then holds the screen awake (`FLAG_KEEP_SCREEN_ON`) only until the TV's `sleep_timeout`
+(20 min total) would have turned it off, so the TV still sleeps on schedule. See `MainActivity`.
 
 ## Home button
 

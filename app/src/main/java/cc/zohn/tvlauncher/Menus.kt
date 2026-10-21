@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -33,10 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.tv.material3.Text
-import cc.zohn.tvlauncher.ui.theme.Cinzel
-import cc.zohn.tvlauncher.ui.theme.Gold
-import cc.zohn.tvlauncher.ui.theme.Ivory
-import cc.zohn.tvlauncher.ui.theme.Walnut
+import cc.zohn.tvlauncher.ui.theme.LocalPalette
 
 private val PanelShape = RoundedCornerShape(14.dp)
 private val ButtonShape = RoundedCornerShape(10.dp)
@@ -75,32 +73,37 @@ fun InputPickerDialog(inputs: List<InputEntry>, onPick: (InputEntry) -> Unit, on
 
 @Composable
 private fun MenuPanel(title: String, onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+    // Dialogs are separate windows: re-provide the palette inside.
+    val palette = LocalPalette.current
     Dialog(onDismissRequest = onDismiss) {
+        CompositionLocalProvider(LocalPalette provides palette) {
         Column(
             verticalArrangement = Arrangement.spacedBy(10.dp),
             modifier = Modifier
                 .width(460.dp)
                 .clip(PanelShape)
-                .background(Walnut)
-                .border(1.dp, Gold.copy(alpha = 0.5f), PanelShape)
+                .background(palette.surface)
+                .border(1.dp, palette.accent.copy(alpha = 0.5f), PanelShape)
                 .padding(28.dp),
         ) {
             Text(
                 title,
-                fontFamily = Cinzel,
+                fontFamily = palette.display,
                 fontSize = 30.sp,
-                color = Ivory,
+                color = palette.text,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Spacer(Modifier.height(6.dp))
             content()
         }
+        }
     }
 }
 
 @Composable
 private fun MenuButton(label: String, initialFocus: Boolean = false, onClick: () -> Unit) {
+    val palette = LocalPalette.current
     val requester = remember { FocusRequester() }
     var focused by remember { mutableStateOf(false) }
 
@@ -112,10 +115,10 @@ private fun MenuButton(label: String, initialFocus: Boolean = false, onClick: ()
             .focusRequester(requester)
             .onFocusChanged { focused = it.isFocused }
             .clip(ButtonShape)
-            .background(if (focused) Gold.copy(alpha = 0.2f) else Color.Transparent)
+            .background(if (focused) palette.glow.copy(alpha = 0.2f) else Color.Transparent)
             .border(
                 width = if (focused) 2.dp else 1.dp,
-                color = if (focused) Gold else Gold.copy(alpha = 0.15f),
+                color = if (focused) palette.glow else palette.accent.copy(alpha = 0.15f),
                 shape = ButtonShape,
             )
             .clickable(
@@ -125,7 +128,7 @@ private fun MenuButton(label: String, initialFocus: Boolean = false, onClick: ()
             )
             .padding(horizontal = 20.dp),
     ) {
-        Text(label, fontSize = 20.sp, color = Ivory)
+        Text(label, fontSize = 20.sp, color = palette.text)
     }
 
     if (initialFocus) {

@@ -5,23 +5,37 @@ import android.content.Context
 private const val KEY_HIDDEN = "hidden"
 private const val KEY_PACKAGE_SEQ = "pkgSeq"
 private const val KEY_BOOT_COUNT = "bootCount"
+private const val KEY_PROFILE = "profile"
 private const val COUNT_PREFIX = "count:"
 
+/**
+ * Per-profile keys are prefixed "<profile id>:". Zohn's use the bare keys (his was the only
+ * profile at first), so his history carried over untouched.
+ */
 class LauncherPrefs(context: Context) {
     private val prefs = context.getSharedPreferences("launcher", Context.MODE_PRIVATE)
 
-    var hidden: Set<String>
-        get() = prefs.getStringSet(KEY_HIDDEN, emptySet())!!.toSet()
-        set(value) = prefs.edit().putStringSet(KEY_HIDDEN, value).apply()
+    // The TV opens in whoever used it last.
+    var activeProfile: Profile
+        get() = Profile.fromId(prefs.getString(KEY_PROFILE, null))
+        set(value) = prefs.edit().putString(KEY_PROFILE, value.id).apply()
+
+    fun hidden(profile: Profile): Set<String> =
+        prefs.getStringSet(key(profile, KEY_HIDDEN), emptySet())!!.toSet()
+
+    fun setHidden(profile: Profile, value: Set<String>) =
+        prefs.edit().putStringSet(key(profile, KEY_HIDDEN), value).apply()
 
     // Only launches made from Zohn TV are counted (no usage-access permission).
-    fun launchCounts(): Map<String, Int> =
-        prefs.all.entries
-            .filter { it.key.startsWith(COUNT_PREFIX) && it.value is Int }
-            .associate { it.key.removePrefix(COUNT_PREFIX) to it.value as Int }
+    fun launchCounts(profile: Profile): Map<String, Int> {
+        val prefix = key(profile, COUNT_PREFIX)
+        return prefs.all.entries
+            .filter { it.key.startsWith(prefix) && it.value is Int }
+            .associate { it.key.removePrefix(prefix) to it.value as Int }
+    }
 
-    fun recordLaunch(packageName: String) {
-        val key = COUNT_PREFIX + packageName
+    fun recordLaunch(profile: Profile, packageName: String) {
+        val key = key(profile, COUNT_PREFIX + packageName)
         prefs.edit().putInt(key, prefs.getInt(key, 0) + 1).apply()
     }
 
@@ -32,4 +46,7 @@ class LauncherPrefs(context: Context) {
     var bootCount: Int
         get() = prefs.getInt(KEY_BOOT_COUNT, -1)
         set(value) = prefs.edit().putInt(KEY_BOOT_COUNT, value).apply()
+
+    private fun key(profile: Profile, base: String) =
+        if (profile == Profile.ZOHN) base else "${profile.id}:$base"
 }

@@ -43,8 +43,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
-import cc.zohn.tvlauncher.ui.theme.Gold
-import cc.zohn.tvlauncher.ui.theme.Walnut
+import cc.zohn.tvlauncher.ui.theme.LocalPalette
 
 private val TileShape = RoundedCornerShape(10.dp)
 private val TileWidth = 208.dp
@@ -101,8 +100,11 @@ private fun DockTile(
     onClick: () -> Unit,
     onMenu: () -> Unit,
 ) {
+    val palette = LocalPalette.current
     var focused by remember { mutableStateOf(false) }
-    // Set once a held OK has opened the menu, so its release doesn't also launch the app.
+    // OK only counts if this tile saw the press start (a release left over from closing the gallery
+    // or a dialog must not launch anything), and not once a held OK has opened the menu.
+    var pressed by remember { mutableStateOf(false) }
     var longPressed by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(if (focused) 1.1f else 1f, label = "tileScale")
     val glow by animateFloatAsState(if (focused) 1f else 0f, label = "tileGlow")
@@ -120,7 +122,7 @@ private fun DockTile(
                 scaleY = scale
                 alpha = restAlpha + (1f - restAlpha) * glow
             }
-            // Gold bloom: stacked rounded rects fading outward, kept inside the dock's padding so it
+            // Bloom: stacked rounded rects fading outward, kept inside the dock's padding so it
             // isn't clipped. (Cheaper on the Mali-G31 than an animated shadow.)
             .drawBehind {
                 if (glow > 0f) {
@@ -129,7 +131,7 @@ private fun DockTile(
                     for (i in steps downTo 1) {
                         val grow = spread * i / steps
                         drawRoundRect(
-                            color = Gold.copy(alpha = 0.07f * glow),
+                            color = palette.glow.copy(alpha = 0.07f * glow),
                             topLeft = Offset(-grow, -grow),
                             size = Size(size.width + grow * 2, size.height + grow * 2),
                             cornerRadius = CornerRadius(10.dp.toPx() + grow),
@@ -154,15 +156,17 @@ private fun DockTile(
                         when (event.type) {
                             KeyEventType.KeyDown -> {
                                 if (native.repeatCount == 0) {
+                                    pressed = true
                                     longPressed = false
-                                } else if (!longPressed) {
+                                } else if (pressed && !longPressed) {
                                     longPressed = true
                                     onMenu()
                                 }
                                 true
                             }
                             KeyEventType.KeyUp -> {
-                                if (!longPressed) onClick()
+                                if (pressed && !longPressed) onClick()
+                                pressed = false
                                 longPressed = false
                                 true
                             }
@@ -173,10 +177,10 @@ private fun DockTile(
             }
             .focusable()
             .clip(TileShape)
-            .background(Walnut)
+            .background(palette.surface)
             .border(
                 width = if (focused) 3.dp else 1.dp,
-                color = if (focused) Gold else Gold.copy(alpha = 0.22f),
+                color = if (focused) palette.glow else palette.accent.copy(alpha = 0.22f),
                 shape = TileShape,
             ),
     ) {

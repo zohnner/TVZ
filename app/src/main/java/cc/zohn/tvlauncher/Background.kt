@@ -28,6 +28,8 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import cc.zohn.tvlauncher.ui.theme.Gold
 import cc.zohn.tvlauncher.ui.theme.Ink
+import cc.zohn.tvlauncher.ui.theme.LauncherPalette
+import cc.zohn.tvlauncher.ui.theme.LocalPalette
 import cc.zohn.tvlauncher.ui.theme.Oxblood
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -50,15 +52,48 @@ private const val DRIFT_SWEEP_MS = 30_000
 private const val DRIFT_IDLE_MS = 2_000L
 
 /**
- * Every full-screen layer costs a full 1080p fill on the GPU each frame. Wallpaper, the focused
- * app's backdrop and the scrim never move relative to each other, so they're pre-composited into
- * one small bitmap per focused app (~1 ms on focus change) — two full-screen layers instead of four.
- *
- * [focusedBackdrop] is read lazily so focus moves recompose only this, not the whole screen.
+ * [artwork] is today's painting for art-focused profiles (null while it loads).
+ * [focusedBackdrop] is read lazily so focus moves recompose only the backdrop, not the screen.
  * [lastInputAt] is the uptime of the last key press (see [runDrift]).
  */
 @Composable
-fun BackgroundLayers(focusedBackdrop: () -> ImageBitmap?, lastInputAt: () -> Long) {
+fun BackgroundLayers(
+    profile: Profile,
+    artwork: ImageBitmap?,
+    focusedBackdrop: () -> ImageBitmap?,
+    lastInputAt: () -> Long,
+) {
+    if (profile.artFocus) ArtBackground(artwork) else BaroqueBackground(focusedBackdrop, lastInputAt)
+}
+
+/**
+ * Sydney: the painting full-screen, under a soft mist that keeps text legible. No app backdrop
+ * and no drift — the painting is the star — which keeps it at two full-screen layers.
+ */
+@Composable
+private fun ArtBackground(artwork: ImageBitmap?) {
+    val palette = LocalPalette.current
+    val placeholder = remember(palette) { renderPondPlaceholder(palette) }
+    val mist = remember(palette) { renderMist(palette) }
+
+    Crossfade(targetState = artwork, label = "painting") { image ->
+        if (image != null) {
+            Image(image, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        } else {
+            StretchedLayer(placeholder)
+        }
+    }
+    StretchedLayer(mist)
+}
+
+/**
+ * Zohn: every full-screen layer costs a full 1080p fill on the GPU each frame. Wallpaper, the
+ * focused app's backdrop and the scrim never move relative to each other, so they're
+ * pre-composited into one small bitmap per focused app (~1 ms on focus change) — two full-screen
+ * layers instead of four.
+ */
+@Composable
+private fun BaroqueBackground(focusedBackdrop: () -> ImageBitmap?, lastInputAt: () -> Long) {
     val tint = remember { renderTint() }
 
     // Layer 1: wallpaper + focused app's banner (tiny copy, so stretching blurs it) + scrim,
@@ -167,6 +202,47 @@ private fun renderBase(backdrop: ImageBitmap?) = renderLayer {
             1f to Ink.copy(alpha = 0.92f),
         )
     )
+}
+
+// Water-lily pond colors while today's painting downloads (or if the TV is offline with no cache).
+private fun renderPondPlaceholder(palette: LauncherPalette) = renderLayer {
+    drawRect(palette.background)
+    drawRect(
+        Brush.radialGradient(
+            listOf(palette.accent.copy(alpha = 0.35f), Color.Transparent),
+            center = Offset(size.width * 0.3f, size.height * 0.7f),
+            radius = size.width * 0.45f,
+        )
+    )
+    drawRect(
+        Brush.radialGradient(
+            listOf(palette.glow.copy(alpha = 0.3f), Color.Transparent),
+            center = Offset(size.width * 0.75f, size.height * 0.3f),
+            radius = size.width * 0.4f,
+        )
+    )
+    drawRect(
+        Brush.radialGradient(
+            listOf(palette.secondary.copy(alpha = 0.25f), Color.Transparent),
+            center = Offset(size.width * 0.55f, size.height * 0.55f),
+            radius = size.width * 0.25f,
+        )
+    )
+}
+
+// Soft light veil where text sits: clock/date/weather (top right), hero (left), dock (bottom).
+private fun renderMist(palette: LauncherPalette) = renderLayer {
+    val mist = palette.background
+    drawRect(Brush.verticalGradient(0f to mist.copy(alpha = 0.6f), 0.3f to Color.Transparent))
+    drawRect(
+        Brush.radialGradient(
+            listOf(mist.copy(alpha = 0.85f), mist.copy(alpha = 0.6f), Color.Transparent),
+            center = Offset(size.width * 0.9f, size.height * 0.2f),
+            radius = size.width * 0.28f,
+        )
+    )
+    drawRect(Brush.horizontalGradient(0f to mist.copy(alpha = 0.55f), 0.55f to Color.Transparent))
+    drawRect(Brush.verticalGradient(0.5f to Color.Transparent, 1f to mist.copy(alpha = 0.9f)))
 }
 
 // Sits above the scrim now (it used to sit below), so it's a touch fainter than before.

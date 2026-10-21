@@ -4,8 +4,6 @@ import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
 import java.net.URLEncoder
 import kotlin.math.roundToInt
 
@@ -21,7 +19,7 @@ suspend fun fetchWeather(city: String): WeatherNow? = withContext(Dispatchers.IO
     try {
         val name = city.substringBefore(',').trim()
         val region = city.substringAfter(',', "").trim()
-        val geo = getJson(
+        val geo = httpGetJson(
             "https://geocoding-api.open-meteo.com/v1/search?count=10&language=en&format=json&name=" +
                 URLEncoder.encode(name, "UTF-8")
         )
@@ -34,7 +32,7 @@ suspend fun fetchWeather(city: String): WeatherNow? = withContext(Dispatchers.IO
                 it.optString("country_code").equals(region, ignoreCase = true)
         } ?: places.first()
 
-        val forecast = getJson(
+        val forecast = httpGetJson(
             "https://api.open-meteo.com/v1/forecast?latitude=${place.getDouble("latitude")}" +
                 "&longitude=${place.getDouble("longitude")}" +
                 "&current=temperature_2m,weather_code&temperature_unit=fahrenheit"
@@ -47,16 +45,6 @@ suspend fun fetchWeather(city: String): WeatherNow? = withContext(Dispatchers.IO
     }
 }
 
-private fun getJson(url: String): JSONObject {
-    val connection = URL(url).openConnection() as HttpURLConnection
-    connection.connectTimeout = 10_000
-    connection.readTimeout = 10_000
-    return try {
-        JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
-    } finally {
-        connection.disconnect()
-    }
-}
 
 // WMO weather interpretation codes, as used by Open-Meteo.
 private fun describe(code: Int): String = when (code) {
