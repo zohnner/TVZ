@@ -5,12 +5,15 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
@@ -126,27 +129,35 @@ fun GridFloor(p: LauncherPalette, horizonFraction: Float, animate: Boolean, last
     val offset = remember { Animatable(0f) }
     if (animate) LaunchedEffect(Unit) { scrollWhileIdle(offset, lastInputAt) }
 
-    Canvas(Modifier.fillMaxSize()) {
-        if (p.gridAlpha <= 0f) return@Canvas
-        val horizonY = size.height * horizonFraction
-        val depth = size.height - horizonY
-        // Horizontal lines bunch up toward the horizon and fade into it.
-        for (i in 0..GRID_LINES) {
-            val t = ((i + offset.value) / GRID_LINES).coerceIn(0f, 1f)
-            val y = horizonY + depth * t * t
-            drawLine(p.gridH.copy(alpha = p.gridH.alpha * p.gridAlpha * t), Offset(0f, y), Offset(size.width, y), strokeWidth = 1.5f)
-        }
-        // Vertical lines converge on a vanishing point at the horizon's center.
-        val vanishing = Offset(size.width / 2, horizonY)
-        val columnBrush = Brush.verticalGradient(
-            listOf(Color.Transparent, p.gridV.copy(alpha = p.gridV.alpha * p.gridAlpha)),
-            startY = horizonY, endY = size.height,
-        )
-        for (i in -GRID_COLUMNS / 2..GRID_COLUMNS / 2) {
-            val bottomX = size.width / 2 + i * size.width * 2f / GRID_COLUMNS
-            drawLine(columnBrush, vanishing, Offset(bottomX, size.height), strokeWidth = 1.5f)
-        }
-    }
+    // Own graphics layer: the per-frame offset read invalidates only this layer, not the whole screen.
+    // drawWithCache hoists the brush/colors so a frame only draws lines.
+    Spacer(
+        Modifier.fillMaxSize().graphicsLayer().drawWithCache {
+            val horizonY = size.height * horizonFraction
+            val depth = size.height - horizonY
+            val vanishing = Offset(size.width / 2, horizonY)
+            val hBase = p.gridH.alpha * p.gridAlpha
+            val hColor = p.gridH.copy(alpha = 1f)
+            val columnBrush = Brush.verticalGradient(
+                listOf(Color.Transparent, p.gridV.copy(alpha = p.gridV.alpha * p.gridAlpha)),
+                startY = horizonY, endY = size.height,
+            )
+            onDrawBehind {
+                if (p.gridAlpha <= 0f) return@onDrawBehind
+                // Horizontal lines bunch up toward the horizon and fade into it.
+                for (i in 0..GRID_LINES) {
+                    val t = ((i + offset.value) / GRID_LINES).coerceIn(0f, 1f)
+                    val y = horizonY + depth * t * t
+                    drawLine(hColor.copy(alpha = hBase * t), Offset(0f, y), Offset(size.width, y), strokeWidth = 1.5f)
+                }
+                // Vertical lines converge on a vanishing point at the horizon's center.
+                for (i in -GRID_COLUMNS / 2..GRID_COLUMNS / 2) {
+                    val bottomX = size.width / 2 + i * size.width * 2f / GRID_COLUMNS
+                    drawLine(columnBrush, vanishing, Offset(bottomX, size.height), strokeWidth = 1.5f)
+                }
+            }
+        },
+    )
 }
 
 private suspend fun scrollWhileIdle(offset: Animatable<Float, *>, lastInputAt: () -> Long) {

@@ -10,6 +10,7 @@ import kotlin.math.roundToInt
 private const val TAG = "TvLauncher"
 
 // "City" or "City, State/Country" (e.g. "Austin, Texas"). Blank hides the weather line.
+// Keep in sync with HOME_LATITUDE / HOME_LONGITUDE in SunCalc.kt (the sun maths uses those, not this name).
 const val WEATHER_CITY = "Kansas City, Missouri"
 
 data class WeatherNow(val tempF: Int, val summary: String)

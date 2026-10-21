@@ -29,6 +29,9 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -47,9 +50,10 @@ fun AppMenuDialog(
     onToggleHidden: () -> Unit,
     onAppInfo: () -> Unit,
     onToggleShowHidden: () -> Unit,
+    onInput: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    MenuPanel(app.label, onDismiss) {
+    MenuPanel(app.label, onInput, onDismiss) {
         MenuButton(if (isHidden) "Unhide" else "Hide from Zohn TV", initialFocus = true) {
             onToggleHidden(); onDismiss()
         }
@@ -62,8 +66,8 @@ fun AppMenuDialog(
 }
 
 @Composable
-fun InputPickerDialog(inputs: List<InputEntry>, onPick: (InputEntry) -> Unit, onDismiss: () -> Unit) {
-    MenuPanel("Inputs", onDismiss) {
+fun InputPickerDialog(inputs: List<InputEntry>, onPick: (InputEntry) -> Unit, onInput: () -> Unit, onDismiss: () -> Unit) {
+    MenuPanel("Inputs", onInput, onDismiss) {
         inputs.forEachIndexed { index, input ->
             MenuButton(input.label, initialFocus = index == 0) { onPick(input); onDismiss() }
         }
@@ -72,7 +76,7 @@ fun InputPickerDialog(inputs: List<InputEntry>, onPick: (InputEntry) -> Unit, on
 }
 
 @Composable
-private fun MenuPanel(title: String, onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+private fun MenuPanel(title: String, onInput: () -> Unit, onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
     // Dialogs are separate windows: re-provide the palette inside.
     val palette = LocalPalette.current
     Dialog(onDismissRequest = onDismiss) {
@@ -80,6 +84,11 @@ private fun MenuPanel(title: String, onDismiss: () -> Unit, content: @Composable
         Column(
             verticalArrangement = Arrangement.spacedBy(10.dp),
             modifier = Modifier
+                .onPreviewKeyEvent {
+                    // Dialog keys are remote activity too (keeps the greeting/gallery timers honest).
+                    if (it.type == KeyEventType.KeyDown) onInput()
+                    false
+                }
                 .width(460.dp)
                 .clip(PanelShape)
                 .background(palette.surface)

@@ -34,9 +34,14 @@ Working on the TV:
 - The grid scroll pauses while the remote is in use and resumes after 2 s idle.
 
 Not done / open:
-- Zohn's day phase: the high sun sits behind the top-right clock/date/weather/quick-action icons, and the purple date/weather text over the orange sun stripes is hard to read; pending Zohn's design decision (see task-10 walkthrough).
+- Zohn's day phase: the high sun sits behind the top-right clock/date/weather/quick-action icons, and the purple date/weather text over the orange sun stripes is hard to read; pending Zohn's design decision.
 - The idle gallery hasn't been watched end-to-end on the TV yet (it needs ~9.5 min of no input).
-- Navigation runs ~24 ms/frame (GPU ~8 ms); the rest is CPU. See DESIGN.md → Performance.
+- Navigation (real night): janky frames 6.7%, 50th percentile 17 ms, GPU 5 ms. See DESIGN.md → Performance.
+
+Not verified on the TV yet:
+- Sydney morning and evening phases, and their blends.
+- Zohn's evening half-set sun.
+- The greeting after a real overnight sleep (check `adb logcat -s TvLauncher` for the "screen event" order).
 
 ## Code map (`app/src/main/java/cc/zohn/tvlauncher/`)
 
@@ -60,8 +65,8 @@ Not done / open:
 | `TvInputs.kt` | HDMI inputs via `TvInputManager`, passthrough intents |
 | `Weather.kt` | Open-Meteo fetch + `WEATHER_CITY` setting |
 | `HomeRedirectService.kt` | Accessibility service that sends the Home button here (see below) |
-| `Profiles.kt` | The profiles (Zohn, Sydney): id, name, palette, art focus |
-| `Art.kt` | Art Institute of Chicago fetch: daily painting, gallery set, image cache, facts |
+| `Profiles.kt` | The profiles (Zohn, Sydney): id, name, art focus |
+| `Art.kt` | Art Institute of Chicago fetch: per-phase paintings, gallery set, image cache, facts |
 | `Gallery.kt` | Sydney's idle gallery wall |
 | `Http.kt` | Shared HTTP helpers (JSON GET, file download) |
 | `ui/theme/Palette.kt` | `LauncherPalette` fields + fonts (`LocalPalette`); phase palettes live in `Moods.kt` |

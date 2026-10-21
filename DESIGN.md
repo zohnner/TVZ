@@ -52,13 +52,13 @@ tiles dimmed to 72%. Must read clearly from the couch. No glow at night.
 ## Background (Zohn, back to front)
 1. Scene: sky gradient, stars, striped sun, horizon, ground, soft veil behind the hero; rendered on the CPU
    into one 960x540 bitmap and stretched.
-2. Grid floor: a separate pre-rendered layer (below the horizon only), translated slowly when idle.
+2. Grid floor: line-drawn per frame (below the horizon only) on its own graphics layer, scrolling slowly when idle. The root background fill sits under Zohn's opaque scene (harmless).
 
 ## Type
 - Zohn: Orbitron display + JetBrains Mono data (above). Sydney: Playfair Display. Small labels: system sans.
 
 ## Performance (the design depends on these)
-The TV has a Mali-G31 GPU and 1.8 GB RAM. Measured: navigation ~24 ms/frame, GPU ~8 ms.
+The TV has a Mali-G31 GPU and 1.8 GB RAM. Measured (real night): janky frames 6.7%, 50th percentile 17 ms, GPU 5 ms.
 - No live `Modifier.blur` and no gradients shaded per frame. Static layers are drawn once into
   small bitmaps and stretched (Zohn's scene: 960x540).
 - The grid is line-drawn, not a full-screen fill; the scene re-renders at most every 2-10 min (on mood ticks), never per frame.
@@ -84,6 +84,7 @@ Secondary (lily pink) stays #E6A3B4 except at night (#8FB59A sage).
 - Wallpaper: one painting per phase from the Art Institute of Chicago's public-domain Impressionists,
   chosen by the phase's subjects (title match first). Fallback: any piece by the day's painter, any cached
   painting, then a pond placeholder. Each crossfades in at its phase midpoint; fetched lazily, cached.
+- Blends: during a light/dark blend Sydney's text and wordmark pick the higher-contrast endpoint against the blended background (never a lerped mid-grey).
 - Mist layer (pre-rendered) over the painting: top band, a stronger patch behind the clock/date/weather,
   a left fade behind the hero, and a bottom fade behind the dock. At night it becomes the dark veil
   (painting ~55% visible). No app backdrop and no drift.

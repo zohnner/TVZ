@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.net.Uri
 import android.os.Bundle
+import android.os.PowerManager
 import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
@@ -28,6 +29,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.time.LocalDate
 import java.time.ZonedDateTime
 
 private const val TAG = "TvLauncher"
@@ -60,14 +62,22 @@ class MainActivity : ComponentActivity() {
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             val now = SystemClock.elapsedRealtime()
+            Log.d(TAG, "screen event: ${intent.action}")
             when (intent.action) {
                 Intent.ACTION_SCREEN_OFF, Intent.ACTION_DREAMING_STARTED -> if (screenOffAt == null) screenOffAt = now
-                // A duplicate wake broadcast (SCREEN_ON + DREAMING_STOPPED) must not discard the first.
-                else -> if (screenOffAt != null) {
-                    wakeQualified = shouldGreet(screenOffAt, now)
-                    wokeAt = now
-                    screenOffAt = null
-                }
+                // Going to sleep from a dream also sends DREAMING_STOPPED: only a wake if the screen is on.
+                Intent.ACTION_DREAMING_STOPPED ->
+                    if (getSystemService(PowerManager::class.java).isInteractive) wake(now)
+                else -> wake(now)
+            }
+        }
+
+        // A duplicate wake broadcast (SCREEN_ON + DREAMING_STOPPED) must not discard the first.
+        private fun wake(now: Long) {
+            if (screenOffAt != null) {
+                wakeQualified = shouldGreet(screenOffAt, now)
+                wokeAt = now
+                screenOffAt = null
             }
         }
     }
@@ -187,6 +197,13 @@ class MainActivity : ComponentActivity() {
         loadArt()
     }
 
+    override fun onStop() {
+        // Nothing to animate while stopped; fast day is a debug aid and must not outlive the screen.
+        moodJob?.cancel()
+        if (moodClock.fastDay) moodClock.setFastDay(false)
+        super.onStop()
+    }
+
     override fun onPause() {
         super.onPause()
         keepAwakeForGallery(false)
@@ -240,16 +257,17 @@ class MainActivity : ComponentActivity() {
     private fun loadArt() {
         if (!profile.artFocus) return
         val phase = mood.phase
+        val today = LocalDate.now().toEpochDay()
         if (artJob?.isActive == true) {
             if (artJobPhase == phase) return
             artJob?.cancel() // loading for a phase that's no longer current
         }
-        if (art?.phase == phase) return
+        if (art?.phase == phase && art?.epochDay == today) return
         artJobPhase = phase
         artJob = lifecycleScope.launch {
             val piece = ArtRepository.forPhase(this@MainActivity, phase) ?: return@launch
             val image = ArtRepository.image(this@MainActivity, piece) ?: return@launch
-            if (profile.artFocus && mood.phase == phase) art = DailyArt(piece, image, phase)
+            if (profile.artFocus && mood.phase == phase) art = DailyArt(piece, image, phase, today)
         }
     }
 
@@ -307,8 +325,11 @@ class MainActivity : ComponentActivity() {
             return
         }
         prefs.recordLaunch(profile, app.packageName)
-        val line = UsageLog.line(ZonedDateTime.now(), mood.phase, profile.id, app.packageName)
-        lifecycleScope.launch(Dispatchers.IO) { UsageLog.append(this@MainActivity, line) }
+        // Fast day fakes the phase: don't pollute the usage log with it.
+        if (!moodClock.fastDay) {
+            val line = UsageLog.line(ZonedDateTime.now(), mood.phase, profile.id, app.packageName)
+            lifecycleScope.launch(Dispatchers.IO) { UsageLog.append(this@MainActivity, line) }
+        }
         start(intent, app.label)
     }
 

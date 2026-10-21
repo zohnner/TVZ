@@ -33,7 +33,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInRoot
@@ -55,7 +57,7 @@ class LauncherActions(
     val openInput: (InputEntry) -> Unit,
     val openSettings: (action: String) -> Unit,
     val switchProfile: () -> Unit,
-    // Any remote key press (drives the drift pause and the gallery idle timer).
+    // Any remote key press (drives the grid pause and the gallery idle timer).
     val onInput: () -> Unit,
     val galleryShowing: (Boolean) -> Unit,
     val loadGallery: suspend (Phase) -> List<Artwork>,
@@ -64,10 +66,10 @@ class LauncherActions(
 )
 
 /** Today's painting for an art-focused profile, ready to draw. */
-class DailyArt(val artwork: Artwork, val image: ImageBitmap, val phase: Phase)
+class DailyArt(val artwork: Artwork, val image: ImageBitmap, val phase: Phase, val epochDay: Long)
 
 /**
- * What has focus. Only [Hero] and the backdrop read it, so moving focus recomposes those two
+ * What has focus. Only [Hero] reads it, so moving focus recomposes it
  * and nothing else on screen — the Mali-G31 TV has no frame budget to spare.
  */
 @Stable
@@ -121,7 +123,7 @@ fun LauncherScreen(
             .background(palette.background)
             .onSizeChanged { screenHeight = it.height.toFloat() }
             .onPreviewKeyEvent {
-                actions.onInput()
+                if (it.type == KeyEventType.KeyDown) actions.onInput()
                 false
             },
     ) {
@@ -205,11 +207,12 @@ fun LauncherScreen(
                 actions.toggleShowHidden()
                 refocusDock++
             },
+            onInput = actions.onInput,
             onDismiss = { menuApp = null },
         )
     }
     if (inputsOpen) {
-        InputPickerDialog(inputs, onPick = actions.openInput, onDismiss = { inputsOpen = false })
+        InputPickerDialog(inputs, onPick = actions.openInput, onInput = actions.onInput, onDismiss = { inputsOpen = false })
     }
 }
 

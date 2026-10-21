@@ -22,15 +22,11 @@ data class AppEntry(
     val packageName: String,
     val image: ImageBitmap,
     val isBanner: Boolean,
-    // Tiny copy of the banner; stretched full-screen it reads as a blur without a GPU blur pass.
-    val backdrop: ImageBitmap? = null,
 )
 
 private const val BANNER_W = 320
 private const val BANNER_H = 180
 private const val ICON_SIZE = 192
-private const val BACKDROP_W = 32
-private const val BACKDROP_H = 18
 
 fun loadApps(pm: PackageManager, selfPackage: String): List<AppEntry> {
     val query = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER)
@@ -46,7 +42,6 @@ fun loadApps(pm: PackageManager, selfPackage: String): List<AppEntry> {
                 packageName = activity.packageName,
                 image = (banner ?: info.loadIcon(pm)).toImage(banner != null),
                 isBanner = banner != null,
-                backdrop = banner?.toBitmap(BACKDROP_W, BACKDROP_H)?.asImageBitmap(),
             )
         }
 }
@@ -84,7 +79,6 @@ object AppCache {
                     packageName = pkg,
                     image = image.asImageBitmap(),
                     isBanner = entry.getBoolean("banner"),
-                    backdrop = BitmapFactory.decodeFile(File(dir, "$pkg.bd.png").path)?.asImageBitmap(),
                 )
             }
         }
@@ -99,7 +93,6 @@ object AppCache {
             val entries = JSONArray()
             for (app in apps) {
                 File(dir, "${app.packageName}.png").writePng(app.image)
-                app.backdrop?.let { File(dir, "${app.packageName}.bd.png").writePng(it) }
                 entries.put(
                     JSONObject()
                         .put("pkg", app.packageName)
