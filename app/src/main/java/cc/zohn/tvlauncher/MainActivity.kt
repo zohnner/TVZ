@@ -54,9 +54,19 @@ class MainActivity : ComponentActivity() {
     private var greeting by mutableStateOf<String?>(null)
     private var greetingJob: Job? = null
     private var screenOffAt: Long? = null
+    private var wokeAt: Long? = null
+    private var wakeQualified = false
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            if (screenOffAt == null) screenOffAt = SystemClock.elapsedRealtime()
+            val now = SystemClock.elapsedRealtime()
+            when (intent.action) {
+                Intent.ACTION_SCREEN_OFF, Intent.ACTION_DREAMING_STARTED -> if (screenOffAt == null) screenOffAt = now
+                else -> {
+                    wakeQualified = shouldGreet(screenOffAt, now)
+                    wokeAt = now
+                    screenOffAt = null
+                }
+            }
         }
     }
     // Time/zone/date changes invalidate the sun maths: restart the clock.
@@ -86,6 +96,8 @@ class MainActivity : ComponentActivity() {
             IntentFilter().apply {
                 addAction(Intent.ACTION_SCREEN_OFF)
                 addAction(Intent.ACTION_DREAMING_STARTED)
+                addAction(Intent.ACTION_SCREEN_ON)
+                addAction(Intent.ACTION_DREAMING_STOPPED)
             },
             ContextCompat.RECEIVER_NOT_EXPORTED,
         )
@@ -161,8 +173,10 @@ class MainActivity : ComponentActivity() {
         // The clock's delay is uptime-based, so after standby the mood may be stale: refresh now.
         startMoodClock()
         mood = moodClock.state()
-        if (shouldGreet(screenOffAt, SystemClock.elapsedRealtime())) showGreeting()
+        if (greetOnResume(screenOffAt, wokeAt, wakeQualified, SystemClock.elapsedRealtime())) showGreeting()
         screenOffAt = null
+        wokeAt = null
+        wakeQualified = false
         // Coming back from an app counts as activity: no gallery the moment you return.
         lastInputAt.longValue = SystemClock.uptimeMillis()
         apps = sortByUse(apps)
