@@ -65,6 +65,24 @@ class MoodsTest {
         assertEquals(1f, contrastRatio(Color.White, Color.White), 0.001f)
     }
 
+    @Test fun darkToDarkBlendLerpsTextInsteadOfSnapping() {
+        // Zohn's backgrounds are dark in every phase: text must glide, not jump at the blend's end.
+        for ((from, to) in listOf(Phase.EVENING to Phase.NIGHT, Phase.NIGHT to Phase.MORNING)) {
+            val x = Moods.palette("zohn", from)
+            val y = Moods.palette("zohn", to)
+            val mid = blendPalettes(x, y, 0.5f)
+            assertEquals("$from->$to text", lerp(x.text, y.text, 0.5f), mid.text)
+            assertEquals("$from->$to wordmark", lerp(x.wordmark, y.wordmark, 0.5f), mid.wordmark)
+        }
+    }
+
+    @Test fun fullNightOnlyOutsideBlends() {
+        assertTrue(MoodState(Phase.NIGHT, Phase.MORNING, 0f, -20.0).isFullNight)
+        assertFalse(MoodState(Phase.EVENING, Phase.NIGHT, 0.6f, -10.0).isFullNight) // phase is NIGHT already
+        assertFalse(MoodState(Phase.NIGHT, Phase.MORNING, 0.3f, -8.0).isFullNight)
+        assertFalse(MoodState(Phase.DAY, Phase.EVENING, 0f, 30.0).isFullNight)
+    }
+
     @Test fun sydneyBlendsStayLegible() {
         val pairs = listOf(Phase.EVENING to Phase.NIGHT, Phase.NIGHT to Phase.MORNING)
         for ((from, to) in pairs) {

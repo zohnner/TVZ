@@ -101,9 +101,13 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-    // Time/zone/date changes invalidate the sun maths: restart the clock.
+    // Time/zone/date changes invalidate the sun maths: restart the clock. Only while visible:
+    // onStop stops the clock on purpose and onResume restarts it (DATE_CHANGED fires at midnight
+    // even while another app is open).
     private val timeReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) = startMoodClock()
+        override fun onReceive(context: Context, intent: Intent) {
+            if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) startMoodClock()
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

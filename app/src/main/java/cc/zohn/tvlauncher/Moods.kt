@@ -21,6 +21,8 @@ fun contrastRatio(x: Color, y: Color): Float {
     return (maxOf(l1, l2) + 0.05f) / (minOf(l1, l2) + 0.05f)
 }
 
+private fun isLight(c: Color) = c.luminance() > 0.2f
+
 fun blendPalettes(a: LauncherPalette, b: LauncherPalette, t: Float): LauncherPalette {
     if (t <= 0f) return a
     if (t >= 1f) return b
@@ -28,8 +30,14 @@ fun blendPalettes(a: LauncherPalette, b: LauncherPalette, t: Float): LauncherPal
     fun f(x: Float, y: Float) = x + (y - x) * t
     val second = t >= 0.5f
     val background = c(a.background, b.background)
-    // Text on a mid-blend light<->dark background would vanish: keep whichever endpoint reads better.
-    fun readable(x: Color, y: Color) = if (contrastRatio(x, background) >= contrastRatio(y, background)) x else y
+    // Foreground colors on a mid-blend light<->dark background would vanish (Sydney): keep whichever
+    // endpoint reads better. Dark-to-dark blends (all of Zohn's) just glide; picking would snap.
+    val crossesLightDark = isLight(a.background) != isLight(b.background)
+    fun readable(x: Color, y: Color) = when {
+        !crossesLightDark -> c(x, y)
+        contrastRatio(x, background) >= contrastRatio(y, background) -> x
+        else -> y
+    }
     return LauncherPalette(
         background = background,
         surface = c(a.surface, b.surface),

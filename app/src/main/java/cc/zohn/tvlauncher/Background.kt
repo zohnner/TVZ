@@ -62,7 +62,8 @@ private fun SunsetBackground(mood: MoodState, horizonFraction: Float, lastInputA
         if (rendered != null) value = rendered
     }
     scene?.let { StretchedLayer(it) }
-    GridFloor(palette, horizonFraction, animate = mood.phase != Phase.NIGHT, lastInputAt = lastInputAt)
+    // Scrolls until the evening->night blend has finished (stopping at its midpoint was a visible snap).
+    GridFloor(palette, horizonFraction, animate = !mood.isFullNight, lastInputAt = lastInputAt)
 }
 
 /**

@@ -18,6 +18,9 @@ enum class Phase {
  */
 data class MoodState(val from: Phase, val to: Phase, val blend: Float, val sunElevation: Double) {
     val phase: Phase get() = if (blend >= 0.5f) to else from
+
+    /** Night with no blend running: what stops motion (stopping mid-blend reads as a snap). */
+    val isFullNight: Boolean get() = from == Phase.NIGHT && blend == 0f
 }
 
 object Mood {
