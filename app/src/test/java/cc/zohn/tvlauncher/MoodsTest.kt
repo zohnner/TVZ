@@ -25,7 +25,7 @@ class MoodsTest {
 
     @Test fun midpointBlendsColorsAndNumbers() {
         val mid = blendPalettes(a, b, 0.5f)
-        assertEquals(lerp(a.text, b.text, 0.5f), mid.text)
+        assertTrue(mid.text == a.text || mid.text == b.text) // text picks an endpoint, never a lerp
         assertEquals(lerp(a.sky1, b.sky1, 0.5f), mid.sky1)
         assertEquals(0.5f, mid.starAlpha, 0.0001f)
         assertEquals(0.5f, mid.glowStrength, 0.0001f)
@@ -54,5 +54,24 @@ class MoodsTest {
         val o = ThemeOverride(a, "KICKOFF IN 0:20", Instant.parse("2026-10-25T21:00:00Z"))
         assertTrue(o.activeAt(Instant.parse("2026-10-25T20:59:00Z")))
         assertFalse(o.activeAt(Instant.parse("2026-10-25T21:00:00Z")))
+    }
+
+    @Test fun sydneyNightHasNoFocusBloom() {
+        assertEquals(0f, Moods.palette("sydney", Phase.NIGHT).glowStrength, 0f)
+    }
+
+    @Test fun contrastRatioKnownValues() {
+        assertEquals(21f, contrastRatio(Color.Black, Color.White), 0.01f)
+        assertEquals(1f, contrastRatio(Color.White, Color.White), 0.001f)
+    }
+
+    @Test fun sydneyBlendsStayLegible() {
+        val pairs = listOf(Phase.EVENING to Phase.NIGHT, Phase.NIGHT to Phase.MORNING)
+        for ((from, to) in pairs) {
+            for (t in listOf(0.2f, 0.35f, 0.5f, 0.65f, 0.8f)) {
+                val m = blendPalettes(Moods.palette("sydney", from), Moods.palette("sydney", to), t)
+                assertTrue("$from->$to t=$t text", contrastRatio(m.text, m.background) >= 3.0f)
+            }
+        }
     }
 }

@@ -2,6 +2,7 @@ package cc.zohn.tvlauncher
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import cc.zohn.tvlauncher.ui.theme.JetBrainsMono
 import cc.zohn.tvlauncher.ui.theme.LauncherPalette
 import cc.zohn.tvlauncher.ui.theme.Orbitron
@@ -13,22 +14,32 @@ data class ThemeOverride(val palette: LauncherPalette, val heroLine: String?, va
     fun activeAt(now: Instant): Boolean = now.isBefore(until)
 }
 
+/** WCAG contrast ratio (1..21) between two opaque colors. */
+fun contrastRatio(x: Color, y: Color): Float {
+    val l1 = x.luminance()
+    val l2 = y.luminance()
+    return (maxOf(l1, l2) + 0.05f) / (minOf(l1, l2) + 0.05f)
+}
+
 fun blendPalettes(a: LauncherPalette, b: LauncherPalette, t: Float): LauncherPalette {
     if (t <= 0f) return a
     if (t >= 1f) return b
     fun c(x: Color, y: Color) = lerp(x, y, t)
     fun f(x: Float, y: Float) = x + (y - x) * t
     val second = t >= 0.5f
+    val background = c(a.background, b.background)
+    // Text on a mid-blend light<->dark background would vanish: keep whichever endpoint reads better.
+    fun readable(x: Color, y: Color) = if (contrastRatio(x, background) >= contrastRatio(y, background)) x else y
     return LauncherPalette(
-        background = c(a.background, b.background),
+        background = background,
         surface = c(a.surface, b.surface),
         accent = c(a.accent, b.accent),
         glow = c(a.glow, b.glow),
         secondary = c(a.secondary, b.secondary),
-        text = c(a.text, b.text),
+        text = readable(a.text, b.text),
         display = if (second) b.display else a.display,
         data = if (second) b.data else a.data,
-        wordmark = c(a.wordmark, b.wordmark),
+        wordmark = readable(a.wordmark, b.wordmark),
         ornament = if (second) b.ornament else a.ornament,
         italicGreeting = if (second) b.italicGreeting else a.italicGreeting,
         sky1 = c(a.sky1, b.sky1),
@@ -110,17 +121,17 @@ object Moods {
     )
 
     // Sydney — Water Lilies. Spec §2.
-    private fun sydney(background: Long, surface: Long, accent: Long, glow: Long, text: Long, secondary: Long) =
+    private fun sydney(background: Long, surface: Long, accent: Long, glow: Long, text: Long, secondary: Long, glowStrength: Float = 1f) =
         LauncherPalette(
             background = Color(background), surface = Color(surface), accent = Color(accent),
             glow = Color(glow), secondary = Color(secondary), text = Color(text),
-            display = Playfair, italicGreeting = true,
+            display = Playfair, italicGreeting = true, glowStrength = glowStrength,
         )
 
     private val SYDNEY = mapOf(
         Phase.MORNING to sydney(0xFFE6E3EE, 0xFFF3F0F2, 0xFF7C9A8A, 0xFF9B86C8, 0xFF2A3440, 0xFFE6A3B4),
         Phase.DAY to sydney(0xFFDCE7EE, 0xFFEEF2EC, 0xFF6E8F7A, 0xFF8C7BC0, 0xFF22313A, 0xFFE6A3B4),
         Phase.EVENING to sydney(0xFFF0DCCB, 0xFFF6E9DE, 0xFF9A7B5C, 0xFFB0679A, 0xFF3A2A2E, 0xFFE6A3B4),
-        Phase.NIGHT to sydney(0xFF10202A, 0xFF1B3038, 0xFFA99BD0, 0xFFEBA9BE, 0xFFF4EFE6, 0xFF8FB59A),
+        Phase.NIGHT to sydney(0xFF10202A, 0xFF1B3038, 0xFFA99BD0, 0xFFEBA9BE, 0xFFF4EFE6, 0xFF8FB59A, glowStrength = 0f),
     )
 }
