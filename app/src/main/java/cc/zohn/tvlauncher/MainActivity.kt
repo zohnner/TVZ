@@ -89,7 +89,7 @@ class MainActivity : ComponentActivity() {
             switchProfile = ::switchProfile,
             onInput = { lastInputAt.longValue = SystemClock.uptimeMillis() },
             galleryShowing = ::keepAwakeForGallery,
-            loadGallery = { ArtRepository.gallery() },
+            loadGallery = { ArtRepository.gallery(it) },
             galleryImage = { ArtRepository.image(this, it) },
             toggleFastDay = {
                 moodClock.setFastDay(!moodClock.fastDay)
@@ -123,7 +123,13 @@ class MainActivity : ComponentActivity() {
 
     private fun startMoodClock() {
         moodJob?.cancel()
-        moodJob = lifecycleScope.launch { moodClock.run { mood = it } }
+        moodJob = lifecycleScope.launch {
+            moodClock.run {
+                val phaseChanged = it.phase != mood.phase
+                mood = it
+                if (phaseChanged) loadArt()
+            }
+        }
     }
 
     override fun onDestroy() {
@@ -179,14 +185,15 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // Today's painting for art-focused profiles; a no-op if it's already showing.
+    // This phase's painting for art-focused profiles; a no-op if it's already showing.
     private fun loadArt() {
         if (!profile.artFocus || artJob?.isActive == true) return
+        val phase = mood.phase
+        if (art?.phase == phase) return
         artJob = lifecycleScope.launch {
-            val daily = ArtRepository.daily(this@MainActivity) ?: return@launch
-            if (art?.artwork?.id == daily.id) return@launch
-            val image = ArtRepository.image(this@MainActivity, daily) ?: return@launch
-            if (profile.artFocus) art = DailyArt(daily, image)
+            val piece = ArtRepository.forPhase(this@MainActivity, phase) ?: return@launch
+            val image = ArtRepository.image(this@MainActivity, piece) ?: return@launch
+            if (profile.artFocus) art = DailyArt(piece, image, phase)
         }
     }
 

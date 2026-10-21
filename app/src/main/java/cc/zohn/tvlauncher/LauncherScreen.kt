@@ -57,13 +57,13 @@ class LauncherActions(
     // Any remote key press (drives the drift pause and the gallery idle timer).
     val onInput: () -> Unit,
     val galleryShowing: (Boolean) -> Unit,
-    val loadGallery: suspend () -> List<Artwork>,
+    val loadGallery: suspend (Phase) -> List<Artwork>,
     val galleryImage: suspend (Artwork) -> ImageBitmap?,
     val toggleFastDay: () -> Unit,
 )
 
 /** Today's painting for an art-focused profile, ready to draw. */
-class DailyArt(val artwork: Artwork, val image: ImageBitmap)
+class DailyArt(val artwork: Artwork, val image: ImageBitmap, val phase: Phase)
 
 /**
  * What has focus. Only [Hero] and the backdrop read it, so moving focus recomposes those two
@@ -127,7 +127,7 @@ fun LauncherScreen(
         if (galleryOn) {
             // The rest of the UI isn't composed meanwhile, so it costs nothing to draw.
             ArtGallery(
-                load = actions.loadGallery,
+                load = { actions.loadGallery(mood.phase) },
                 image = actions.galleryImage,
                 onDismiss = { galleryOn = false },
             )

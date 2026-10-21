@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
@@ -112,6 +113,8 @@ private fun renderPondPlaceholder(palette: LauncherPalette) = renderLayer {
 // Soft veil where text sits: clock/date/weather (top right), hero (left), dock (bottom).
 private fun renderMist(palette: LauncherPalette) = renderLayer {
     val mist = palette.background
+    // Night (dark palette): dim the whole painting to ~55% under the Evening-pond veil.
+    if (mist.luminance() < 0.2f) drawRect(mist.copy(alpha = 0.45f))
     drawRect(Brush.verticalGradient(0f to mist.copy(alpha = 0.6f), 0.3f to Color.Transparent))
     drawRect(Brush.radialGradient(listOf(mist.copy(alpha = 0.85f), mist.copy(alpha = 0.6f), Color.Transparent), center = Offset(size.width * 0.9f, size.height * 0.2f), radius = size.width * 0.28f))
     drawRect(Brush.horizontalGradient(0f to mist.copy(alpha = 0.55f), 0.55f to Color.Transparent))

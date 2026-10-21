@@ -34,6 +34,17 @@ private val PAINTERS = listOf(
     "Gustave Caillebotte", "Georges Seurat", "Paul Cézanne",
 )
 
+// Sydney's paintings follow the time of day (moods spec §3).
+fun subjectsFor(phase: Phase): List<String> = when (phase) {
+    Phase.MORNING -> listOf("sunrise", "morning")
+    Phase.DAY -> listOf("garden", "water lilies", "river")
+    Phase.EVENING -> listOf("sunset", "evening")
+    Phase.NIGHT -> listOf("night", "moonlight", "nocturne")
+}
+
+fun pickIndex(epochDay: Long, phase: Phase, size: Int): Int =
+    ((epochDay * 4 + phase.ordinal) % size).toInt()
+
 data class Artwork(
     val id: Int,
     val title: String,
@@ -54,7 +65,7 @@ object ArtRepository {
         if (cached?.first == today) return@withContext cached.second
 
         val painter = PAINTERS[(today % PAINTERS.size).toInt()]
-        val works = search(painter)
+        val works = search(painter) { it.contains(painter.substringAfterLast(' '), ignoreCase = true) }
         if (works.isEmpty()) return@withContext cached?.second
         val pick = works[((today / PAINTERS.size) % works.size).toInt()]
         try {
@@ -69,7 +80,7 @@ object ArtRepository {
     suspend fun gallery(): List<Artwork> = withContext(Dispatchers.IO) {
         val seed = Random(LocalDate.now().toEpochDay())
         PAINTERS.distinct().shuffled(seed).take(4)
-            .flatMap { search(it).shuffled(seed).take(3) }
+            .flatMap { painter -> search(painter) { it.contains(painter.substringAfterLast(' '), ignoreCase = true) }.shuffled(seed).take(3) }
             .shuffled(seed)
     }
 
@@ -91,17 +102,16 @@ object ArtRepository {
         }
     }
 
-    private fun search(painter: String): List<Artwork> = try {
+    private fun search(query: String, artistMatches: (String) -> Boolean): List<Artwork> = try {
         val data = httpGetJson(
-            "$SEARCH_URL?q=${URLEncoder.encode(painter, "UTF-8")}&limit=60&fields=$FIELDS"
+            "$SEARCH_URL?q=${URLEncoder.encode(query, "UTF-8")}&limit=60&fields=$FIELDS"
         ).getJSONArray("data")
-        val surname = painter.substringAfterLast(' ')
         (0 until data.length()).map { data.getJSONObject(it) }
             .filter {
                 it.optBoolean("is_public_domain") &&
                     !it.isNull("image_id") &&
                     it.optString("artwork_type_title") == "Painting" &&
-                    it.optString("artist_title").contains(surname, ignoreCase = true)
+                    artistMatches(it.optString("artist_title"))
             }
             .map {
                 Artwork(
@@ -114,8 +124,44 @@ object ArtRepository {
                 )
             }
     } catch (e: Exception) {
-        Log.w(TAG, "art search failed: $painter", e)
+        Log.w(TAG, "art search failed: $query", e)
         emptyList()
+    }
+
+    /**
+     * This phase's piece for today. Fallback chain: subject match among the Impressionists ->
+     * today's painter ([daily]) -> null (caller keeps what it has, or the pond placeholder).
+     */
+    suspend fun forPhase(context: Context, phase: Phase): Artwork? = withContext(Dispatchers.IO) {
+        val today = LocalDate.now().toEpochDay()
+        val cache = File(dir(context), "phase-${phase.name.lowercase()}.json")
+        readDaily(cache)?.takeIf { it.first == today }?.let { return@withContext it.second }
+
+        val works = subjectSearch(phase)
+        val pick = if (works.isEmpty()) daily(context) else works[pickIndex(today, phase, works.size)]
+        if (pick != null) {
+            try {
+                cache.writeText(JSONObject().put("day", today).put("art", pick.toJson()).toString())
+            } catch (e: Exception) {
+                Log.w(TAG, "art cache write failed", e)
+            }
+        }
+        pick
+    }
+
+    /** Gallery for the current phase's subjects (falls back to the painter mix). */
+    suspend fun gallery(phase: Phase): List<Artwork> = withContext(Dispatchers.IO) {
+        val seed = Random(LocalDate.now().toEpochDay() * 4 + phase.ordinal)
+        subjectSearch(phase).shuffled(seed).take(12).ifEmpty { gallery() }
+    }
+
+    // Impressionist paintings matching any of the phase's subjects, in a stable (id) order.
+    private fun subjectSearch(phase: Phase): List<Artwork> {
+        val surnames = PAINTERS.distinct().map { it.substringAfterLast(' ') }
+        return subjectsFor(phase)
+            .flatMap { subject -> search(subject) { artist -> surnames.any { artist.contains(it, ignoreCase = true) } } }
+            .distinctBy { it.id }
+            .sortedBy { it.id }
     }
 
     // First sentence or two of the museum's description, HTML stripped.
