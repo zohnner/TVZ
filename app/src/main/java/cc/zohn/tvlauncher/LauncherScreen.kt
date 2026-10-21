@@ -77,7 +77,8 @@ class DailyArt(val artwork: Artwork, val image: ImageBitmap, val phase: Phase, v
  */
 @Stable
 private class FocusInfo {
-    var item by mutableStateOf<DockItem?>(null)
+    // Key only: the item is resolved against the current dock so renames/refreshes show immediately.
+    var itemKey by mutableStateOf<String?>(null)
     // Label of a focused quick action, shown in the hero instead of an app name.
     var action by mutableStateOf<String?>(null)
 }
@@ -172,7 +173,7 @@ fun LauncherScreen(
                         )
                         Spacer(Modifier.height(6.dp))
                     }
-                    Hero(focus, fallback = dock.firstOrNull(), hidden = hidden, greeting = greeting)
+                    Hero(focus, dock = dock, hidden = hidden, greeting = greeting)
                 }
                 Spacer(Modifier.height(20.dp))
                 Box(
@@ -187,7 +188,7 @@ fun LauncherScreen(
                     hidden = hidden,
                     refocusRequest = refocusDock,
                     onFocused = {
-                        focus.item = it
+                        focus.itemKey = it.key
                         focus.action = null
                     },
                     onLaunch = {
@@ -264,10 +265,11 @@ fun LauncherScreen(
 }
 
 @Composable
-private fun Hero(focus: FocusInfo, fallback: DockItem?, hidden: Set<String>, greeting: String?) {
+private fun Hero(focus: FocusInfo, dock: List<DockItem>, hidden: Set<String>, greeting: String?) {
     val palette = LocalPalette.current
     val action = focus.action
-    val item = focus.item ?: fallback
+    val key = focus.itemKey
+    val item = dock.firstOrNull { it.key == key } ?: dock.firstOrNull()
     Crossfade(targetState = greeting, label = "greeting") { line ->
         Column {
             Text(

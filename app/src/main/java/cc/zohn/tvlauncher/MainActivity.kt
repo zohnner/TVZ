@@ -22,6 +22,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
@@ -159,11 +160,14 @@ class MainActivity : ComponentActivity() {
         setContent {
             TvzTheme(isInDarkTheme = true) {
                 val activeOverride = themeOverride?.takeIf { it.activeAt(moodClock.now()) }
+                val dock = remember(apps, inputs, hidden, showHidden, counts) {
+                    dockItems(apps, inputs, hidden, showHidden, counts)
+                }
                 LauncherScreen(
                     palette = activeOverride?.palette ?: Moods.effective(profile.id, mood),
                     mood = mood,
                     profile = profile,
-                    dock = dockItems(apps, inputs, hidden, showHidden, counts),
+                    dock = dock,
                     hidden = hidden,
                     showHidden = showHidden,
                     inputs = inputs,
