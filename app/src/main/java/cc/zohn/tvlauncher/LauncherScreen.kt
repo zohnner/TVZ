@@ -1,5 +1,6 @@
 package cc.zohn.tvlauncher
 
+import android.os.SystemClock
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -13,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -21,6 +23,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -63,9 +66,20 @@ fun LauncherScreen(
     var menuApp by remember { mutableStateOf<AppEntry?>(null) }
     var inputsOpen by remember { mutableStateOf(false) }
     var refocusDock by remember { mutableIntStateOf(0) }
+    // Uptime of the last remote key press; the background drift pauses while you navigate.
+    // Only read from coroutines, never in composition, so key presses don't recompose anything.
+    val lastInputAt = remember { mutableLongStateOf(0L) }
 
-    Box(Modifier.fillMaxSize().background(Ink)) {
-        BackgroundLayers(focusedBackdrop = { focus.app?.backdrop })
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Ink)
+            .onPreviewKeyEvent {
+                lastInputAt.longValue = SystemClock.uptimeMillis()
+                false
+            },
+    ) {
+        BackgroundLayers(focusedBackdrop = { focus.app?.backdrop }, lastInputAt = { lastInputAt.longValue })
         Column(Modifier.fillMaxSize().padding(horizontal = 64.dp, vertical = 36.dp)) {
             TopBar(
                 showInputs = inputs.isNotEmpty(),

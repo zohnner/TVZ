@@ -1,0 +1,5 @@
+# Sideloaded app: ask ART to compile all launcher code ahead of time when it next optimizes the
+# app (background dexopt, or `cmd package compile -m speed-profile`). Compose's own libraries
+# ship their profiles separately and are merged in by the build.
+HSPLcc/zohn/tvlauncher/**->**(**)**
+Lcc/zohn/tvlauncher/**;

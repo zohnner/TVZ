@@ -1,17 +1,16 @@
 package cc.zohn.tvlauncher
 
+import android.os.SystemClock
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -30,6 +29,12 @@ import androidx.compose.ui.unit.LayoutDirection
 import cc.zohn.tvlauncher.ui.theme.Gold
 import cc.zohn.tvlauncher.ui.theme.Ink
 import cc.zohn.tvlauncher.ui.theme.Oxblood
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlin.math.abs
 
 // ---- Background: wallpaper → focused-app backdrop → drifting tint → scrim ----
 // The TV's Mali-G31 can't shade several full-screen gradients per frame, so each static layer is
@@ -41,6 +46,8 @@ private const val LAYER_H = 180
 
 // The tint layer is drawn oversized so its edges never slide into view while it drifts.
 private const val TINT_SCALE = 1.5f
+private const val DRIFT_SWEEP_MS = 30_000
+private const val DRIFT_IDLE_MS = 2_000L
 
 /**
  * Every full-screen layer costs a full 1080p fill on the GPU each frame. Wallpaper, the focused
@@ -48,9 +55,10 @@ private const val TINT_SCALE = 1.5f
  * one small bitmap per focused app (~1 ms on focus change) — two full-screen layers instead of four.
  *
  * [focusedBackdrop] is read lazily so focus moves recompose only this, not the whole screen.
+ * [lastInputAt] is the uptime of the last key press (see [runDrift]).
  */
 @Composable
-fun BackgroundLayers(focusedBackdrop: () -> ImageBitmap?) {
+fun BackgroundLayers(focusedBackdrop: () -> ImageBitmap?, lastInputAt: () -> Long) {
     val tint = remember { renderTint() }
 
     // Layer 1: wallpaper + focused app's banner (tiny copy, so stretching blurs it) + scrim,
@@ -61,21 +69,49 @@ fun BackgroundLayers(focusedBackdrop: () -> ImageBitmap?) {
     }
 
     // Layer 2: gold / oxblood light, slid slowly via layer translation (no re-render per frame).
-    val drift by rememberInfiniteTransition(label = "drift").animateFloat(
-        initialValue = -1f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(30_000, easing = LinearEasing), RepeatMode.Reverse),
-        label = "driftT",
-    )
+    val drift = remember { Animatable(-1f) }
+    LaunchedEffect(Unit) { runDrift(drift, lastInputAt) }
     StretchedLayer(
         tint,
         Modifier.graphicsLayer {
             scaleX = TINT_SCALE
             scaleY = TINT_SCALE
-            translationX = drift * size.width * 0.18f
-            translationY = drift * size.height * -0.08f
+            translationX = drift.value * size.width * 0.18f
+            translationY = drift.value * size.height * -0.08f
         },
     )
+}
+
+/**
+ * Drifts the tint back and forth (one sweep per [DRIFT_SWEEP_MS]), but only while the remote is
+ * idle. A running animation redraws the whole screen every frame, which steals frames from focus
+ * moves on this TV, so any key press freezes the drift until [DRIFT_IDLE_MS] of quiet.
+ */
+private suspend fun runDrift(drift: Animatable<Float, *>, lastInputAt: () -> Long) {
+    var target = 1f
+    while (true) {
+        val idleFor = SystemClock.uptimeMillis() - lastInputAt()
+        if (idleFor < DRIFT_IDLE_MS) {
+            delay(DRIFT_IDLE_MS - idleFor)
+            continue
+        }
+        val remaining = abs(target - drift.value)
+        if (remaining < 0.001f) {
+            target = -target
+            continue
+        }
+        coroutineScope {
+            val sweep = launch {
+                drift.animateTo(target, tween((remaining / 2f * DRIFT_SWEEP_MS).toInt(), easing = LinearEasing))
+            }
+            val watcher = launch {
+                snapshotFlow { lastInputAt() }.drop(1).first()
+                sweep.cancel()
+            }
+            sweep.join()
+            watcher.cancel()
+        }
+    }
 }
 
 @Composable

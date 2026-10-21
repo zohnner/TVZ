@@ -12,7 +12,7 @@ import kotlin.math.roundToInt
 private const val TAG = "TvLauncher"
 
 // "City" or "City, State/Country" (e.g. "Austin, Texas"). Blank hides the weather line.
-const val WEATHER_CITY = ""
+const val WEATHER_CITY = "Kansas City, Missouri"
 
 data class WeatherNow(val tempF: Int, val summary: String)
 
