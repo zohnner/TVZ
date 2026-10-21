@@ -18,6 +18,7 @@ Any new visual feature: ask Zohn about style, colors and effects **before** buil
 - Dock: one horizontal row of app banners, **most-used first** (launches from Zohn TV), then A–Z.
   Settings lives in the quick actions, not the dock.
 - Hold OK (or press Menu) on a tile: menu with Hide / Unhide, App info, Show hidden apps.
+- **Input tiles** share the dock and its ordering (counts keyed `input:<id>`). Same size, focus scale, glow and border as app tiles; content is a large outlined icon (`palette.accent`, focused `palette.text`), the title in `palette.display` and the port in `palette.data`, on `palette.surface`. Hold OK / Menu: Rename (kind list, typed name, automatic) / Hide. Ports with no CEC device, no connection and no user name stay out of the dock but remain in the Inputs menu.
   Hidden apps, when shown, are dimmed.
 - Menus: dark panel in the profile's surface color, thin accent border, display-font title, glow-highlighted focused row.
 

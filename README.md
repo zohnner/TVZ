@@ -14,6 +14,7 @@ Working on the TV:
 - Hero + dock layout, focus glow, clock/date/weather, per-profile look (see DESIGN.md).
 - Dock sorted by most-used (launches from Zohn TV only), app list cached on disk for ~1 s cold start.
 - Hold OK (or Menu) on a tile → Hide / App info / Show hidden apps.
+- **Smart inputs:** HDMI ports with a CEC device (or connected, or renamed) get a dock tile named after the device (Blu-ray, Game console, ...), ordered by use like apps. Hold OK → Rename / Hide. Inputs menu rows read "Blu-ray · HDMI 3". Reloads on resume and via `TvInputCallback`.
 - Quick-action row under the clock (press Up from the dock): Inputs (HDMI 1–3, verified switching), Wi-Fi, Bluetooth, Settings.
 - **Two profiles, Zohn and Sydney** (inside the launcher, not Google TV profiles). Switch by focusing
   the name top-left (Up, then Left) and pressing OK. Each has its own look, most-used order and hidden
@@ -57,11 +58,12 @@ Not verified on the TV yet:
 | `Greeting.kt` | Wake detection and greeting text |
 | `UsageLog.kt` | Launch history file for the Habits feature |
 | `TopBar.kt` | Wordmark, clock, weather line, quick-action buttons |
-| `Dock.kt` | App row; tile focus visuals; OK vs. hold-OK/Menu key handling |
-| `Menus.kt` | App menu and input picker dialogs |
+| `Dock.kt` | App + input row (`DockItem`); shared tile chrome (focus, glow, keys) with app / input content |
+| `Menus.kt` | App menu, input picker, input menu / rename picker / name entry dialogs |
 | `AppRepository.kt` | App discovery (`LEANBACK_LAUNCHER`), launch intents, on-disk app cache |
-| `LauncherPrefs.kt` | Active profile; per-profile hidden apps + launch counts; package-change bookkeeping |
-| `TvInputs.kt` | HDMI inputs via `TvInputManager`, passthrough intents |
+| `LauncherPrefs.kt` | Active profile; per-profile hidden apps + launch counts; per-port input names (shared); package-change bookkeeping |
+| `TvInputs.kt` | HDMI ports via `TvInputManager` (+ CEC child device name/type by reflection), passthrough intents |
+| `InputNames.kt` | Pure, unit-tested: `inputKind`, `showInputTile`, `inputTitle`, `portLabel`, `sortedByUse` |
 | `Weather.kt` | Open-Meteo fetch + `WEATHER_CITY` setting |
 | `HomeRedirectService.kt` | Accessibility service that sends the Home button here (see below) |
 | `Profiles.kt` | The profiles (Zohn, Sydney): id, name, art focus |
@@ -72,7 +74,7 @@ Not verified on the TV yet:
 
 ## Tests
 
-`./gradlew.bat testDebugUnitTest` (JVM unit tests: SunCalc, Mood, Moods, art subjects, greeting, usage log).
+`./gradlew.bat testDebugUnitTest` (JVM unit tests: SunCalc, Mood, Moods, art subjects, greeting, usage log, input names).
 
 ## Build & deploy
 

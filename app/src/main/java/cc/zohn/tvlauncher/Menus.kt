@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -110,11 +112,11 @@ fun InputRenameDialog(
 ) {
     MenuPanel("Name for ${input.label}", onInput, onDismiss) {
         InputKind.entries.filter { it != InputKind.UNKNOWN }.forEachIndexed { index, kind ->
-            MenuButton(kind.display, initialFocus = index == 0) { onPick(kind.name); onDismiss() }
+            MenuButton(kind.display, initialFocus = index == 0, compact = true) { onPick(kind.name); onDismiss() }
         }
-        MenuButton("Type a name…") { onType(); onDismiss() }
-        MenuButton("Use automatic name") { onPick(null); onDismiss() }
-        MenuButton("Cancel", onClick = onDismiss)
+        MenuButton("Type a name…", compact = true) { onType(); onDismiss() }
+        MenuButton("Use automatic name", compact = true) { onPick(null); onDismiss() }
+        MenuButton("Cancel", compact = true, onClick = onDismiss)
     }
 }
 
@@ -183,6 +185,8 @@ private fun MenuPanel(title: String, onInput: () -> Unit, onDismiss: () -> Unit,
                 .clip(PanelShape)
                 .background(palette.surface)
                 .border(1.dp, palette.accent.copy(alpha = 0.5f), PanelShape)
+                // Long lists (the rename picker) scroll as focus moves down them.
+                .verticalScroll(rememberScrollState())
                 .padding(28.dp),
         ) {
             Text(
@@ -201,7 +205,7 @@ private fun MenuPanel(title: String, onInput: () -> Unit, onDismiss: () -> Unit,
 }
 
 @Composable
-private fun MenuButton(label: String, initialFocus: Boolean = false, onClick: () -> Unit) {
+private fun MenuButton(label: String, initialFocus: Boolean = false, compact: Boolean = false, onClick: () -> Unit) {
     val palette = LocalPalette.current
     val requester = remember { FocusRequester() }
     var focused by remember { mutableStateOf(false) }
@@ -210,7 +214,7 @@ private fun MenuButton(label: String, initialFocus: Boolean = false, onClick: ()
         contentAlignment = Alignment.CenterStart,
         modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp)
+            .height(if (compact) 44.dp else 56.dp)
             .focusRequester(requester)
             .onFocusChanged { focused = it.isFocused }
             .clip(ButtonShape)
