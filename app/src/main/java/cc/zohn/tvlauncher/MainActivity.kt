@@ -45,6 +45,7 @@ class MainActivity : ComponentActivity() {
     private val lastInputAt = mutableLongStateOf(SystemClock.uptimeMillis())
     private var refreshJob: Job? = null
     private var artJob: Job? = null
+    private var artJobPhase: Phase? = null
     private var keepAwakeJob: Job? = null
     private val moodClock = MoodClock()
     private var mood by mutableStateOf(moodClock.state())
@@ -187,13 +188,18 @@ class MainActivity : ComponentActivity() {
 
     // This phase's painting for art-focused profiles; a no-op if it's already showing.
     private fun loadArt() {
-        if (!profile.artFocus || artJob?.isActive == true) return
+        if (!profile.artFocus) return
         val phase = mood.phase
+        if (artJob?.isActive == true) {
+            if (artJobPhase == phase) return
+            artJob?.cancel() // loading for a phase that's no longer current
+        }
         if (art?.phase == phase) return
+        artJobPhase = phase
         artJob = lifecycleScope.launch {
             val piece = ArtRepository.forPhase(this@MainActivity, phase) ?: return@launch
             val image = ArtRepository.image(this@MainActivity, piece) ?: return@launch
-            if (profile.artFocus) art = DailyArt(piece, image, phase)
+            if (profile.artFocus && mood.phase == phase) art = DailyArt(piece, image, phase)
         }
     }
 

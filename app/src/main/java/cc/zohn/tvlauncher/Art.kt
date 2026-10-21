@@ -45,6 +45,18 @@ fun subjectsFor(phase: Phase): List<String> = when (phase) {
 fun pickIndex(epochDay: Long, phase: Phase, size: Int): Int =
     ((epochDay * 4 + phase.ordinal) % size).toInt()
 
+// 2 = a subject is a whole word in the title, 1 = in the description, 0 = no match.
+fun subjectScore(art: Artwork, subjects: List<String>): Int {
+    fun hits(text: String?) = text != null && subjects.any {
+        Regex("\\b${Regex.escape(it)}\\b", RegexOption.IGNORE_CASE).containsMatchIn(text)
+    }
+    return when {
+        hits(art.title) -> 2
+        hits(art.fact) -> 1
+        else -> 0
+    }
+}
+
 data class Artwork(
     val id: Int,
     val title: String,
@@ -138,8 +150,10 @@ object ArtRepository {
         readDaily(cache)?.takeIf { it.first == today }?.let { return@withContext it.second }
 
         val works = subjectSearch(phase)
-        val pick = if (works.isEmpty()) daily(context) else works[pickIndex(today, phase, works.size)]
-        if (pick != null) {
+        // A fallback pick isn't cached, so the subject search is retried on the next load.
+        if (works.isEmpty()) return@withContext daily(context)
+        val pick = works[pickIndex(today, phase, works.size)]
+        run {
             try {
                 cache.writeText(JSONObject().put("day", today).put("art", pick.toJson()).toString())
             } catch (e: Exception) {
@@ -158,10 +172,15 @@ object ArtRepository {
     // Impressionist paintings matching any of the phase's subjects, in a stable (id) order.
     private fun subjectSearch(phase: Phase): List<Artwork> {
         val surnames = PAINTERS.distinct().map { it.substringAfterLast(' ') }
-        return subjectsFor(phase)
+        val subjects = subjectsFor(phase)
+        val scored = subjects
             .flatMap { subject -> search(subject) { artist -> surnames.any { artist.contains(it, ignoreCase = true) } } }
             .distinctBy { it.id }
-            .sortedBy { it.id }
+            .map { it to subjectScore(it, subjects) }
+        // Only the best tier present: title hits if any, else description hits.
+        val best = scored.maxOfOrNull { it.second } ?: 0
+        if (best == 0) return emptyList()
+        return scored.filter { it.second == best }.map { it.first }.sortedBy { it.id }
     }
 
     // First sentence or two of the museum's description, HTML stripped.
