@@ -24,7 +24,7 @@ Any new visual feature: ask Zohn about style, colors and effects **before** buil
 ## Zohn: Sunset grid
 - Fonts: **Orbitron** (display: name, clock, hero) + **JetBrains Mono** (data lines: date, weather, hints),
   both OFL, in `res/font/`.
-- The sun tracks the real sun elevation, low on the right (~76% of width), never behind the hero text (open: at its daytime height it currently overlaps the top-right clock/weather/icons; pending a design decision).
+- The sun tracks the real sun elevation. It sits in the right corner (center ~85% of width, diameter 15% of width) and is capped: its top edge never rises above 40% of screen height, just below the top-right clock/date/weather/icons (Zohn's pick "B", 2026-10-20). It is clear of long hero titles and sinks fully below the horizon before hiding. `sunCenterY()` in SunsetScene.kt is unit-tested.
   It sinks fully below the horizon at sunset and is hidden at night (stars instead).
 - Horizon = the divider between hero and dock; one line.
 - The perspective grid floor sits below the horizon and scrolls toward the viewer when idle (pauses on

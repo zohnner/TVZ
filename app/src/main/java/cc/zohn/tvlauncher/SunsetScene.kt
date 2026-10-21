@@ -37,8 +37,12 @@ import kotlin.random.Random
 // Half of 1080p: smooth when stretched, ~2 MB.
 private const val SCENE_W = 960
 private const val SCENE_H = 540
-private const val SUN_CENTER_X = 0.76f // low-right, never behind the hero text
-private const val SUN_RADIUS = 0.11f // of width
+// Tucked into the right corner (Zohn's pick "B", 2026-10-20): clear of long hero titles.
+private const val SUN_CENTER_X = 0.85f
+private const val SUN_RADIUS = 0.075f // of width
+// Highest the sun's top edge may climb, as a fraction of screen height: just below the
+// top-right clock/date/weather/quick-action cluster, so text never sits on the sun.
+private const val SUN_CAP_TOP = 0.40f
 private const val SUN_FULL_ELEVATION = 25.0 // degrees at which the sun reaches its high spot
 private const val SUN_HIDDEN_BELOW = -4.0
 private const val STAR_COUNT = 70
@@ -46,6 +50,18 @@ private const val GRID_LINES = 14
 private const val GRID_COLUMNS = 22
 private const val GRID_STEP_MS = 4_000
 private const val GRID_IDLE_MS = 2_000L
+
+/**
+ * Vertical center of the sun for a real [elevation] in degrees. Above the horizon it climbs with
+ * elevation — centered on the horizon at 0°, top edge at [capTopY] from [SUN_FULL_ELEVATION] up.
+ * Below the horizon it sinks linearly so its top edge meets the horizon at [SUN_HIDDEN_BELOW].
+ */
+fun sunCenterY(elevation: Double, horizonY: Float, radius: Float, capTopY: Float): Float {
+    if (elevation < 0.0) return horizonY + radius * (elevation / SUN_HIDDEN_BELOW).toFloat()
+    val highest = minOf(capTopY + radius, horizonY)
+    val lift = (elevation / SUN_FULL_ELEVATION).coerceAtMost(1.0).toFloat()
+    return horizonY - lift * (horizonY - highest)
+}
 
 /**
  * Zohn's sky, sun, stars, horizon and ground, drawn on the CPU once per mood tick (never per
@@ -75,14 +91,7 @@ fun renderSunsetScene(p: LauncherPalette, sunElevation: Double, horizonFraction:
         // Sun: height follows real elevation; striped lower half; clipped at the horizon.
         if (sunElevation > SUN_HIDDEN_BELOW) {
             val radius = w * SUN_RADIUS
-            // Above the horizon the sun climbs with elevation (center on the horizon at 0 degrees);
-            // below it sinks linearly so its top edge meets the horizon exactly when it is hidden.
-            val centerY = if (sunElevation >= 0.0) {
-                val lift = (sunElevation / SUN_FULL_ELEVATION).coerceAtMost(1.0).toFloat()
-                horizonY - lift * horizonY * 0.55f
-            } else {
-                horizonY + radius * (sunElevation / SUN_HIDDEN_BELOW).toFloat()
-            }
+            val centerY = sunCenterY(sunElevation, horizonY, radius, capTopY = size.height * SUN_CAP_TOP)
             val center = Offset(w * SUN_CENTER_X, centerY)
             clipRect(bottom = horizonY) {
                 val sunBrush = Brush.verticalGradient(

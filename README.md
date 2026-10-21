@@ -34,7 +34,6 @@ Working on the TV:
 - The grid scroll pauses while the remote is in use and resumes after 2 s idle.
 
 Not done / open:
-- Zohn's day phase: the high sun sits behind the top-right clock/date/weather/quick-action icons, and the purple date/weather text over the orange sun stripes is hard to read; pending Zohn's design decision.
 - The idle gallery hasn't been watched end-to-end on the TV yet (it needs ~9.5 min of no input).
 - Navigation (real night): janky frames 6.7%, 50th percentile 17 ms, GPU 5 ms. See DESIGN.md → Performance.
 
