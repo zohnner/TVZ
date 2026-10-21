@@ -82,7 +82,7 @@ fun LauncherScreen(
     galleryIdleMs: Long,
     isResumed: () -> Boolean,
     actions: LauncherActions,
-) = CompositionLocalProvider(LocalPalette provides profile.palette) {
+) = CompositionLocalProvider(LocalPalette provides Moods.palette(profile.id, Phase.DAY)) {
     val palette = LocalPalette.current
     val focus = remember { FocusInfo() }
     var menuApp by remember { mutableStateOf<AppEntry?>(null) }

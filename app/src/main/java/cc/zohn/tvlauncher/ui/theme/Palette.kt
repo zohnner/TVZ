@@ -10,18 +10,43 @@ import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import cc.zohn.tvlauncher.R
 
-/** Everything that differs visually between profiles. See DESIGN.md. */
+/**
+ * Everything that differs visually between profiles and moods. See DESIGN.md and
+ * docs/superpowers/specs/2026-10-20-moods-design.md. Scene fields are only used by Zohn's
+ * Sunset grid; Sydney's palettes leave them at their defaults.
+ */
 @Immutable
 data class LauncherPalette(
     val background: Color,
     val surface: Color,
-    // Ornament, frames, unfocused icons.
+    // Frames, lines, date, unfocused icons.
     val accent: Color,
     // Focus frame + glow.
     val glow: Color,
     val secondary: Color,
     val text: Color,
+    // Name, clock, hero.
     val display: FontFamily,
+    // Small data lines: date, weather, hints.
+    val data: FontFamily = FontFamily.Default,
+    val wordmark: Color = accent,
+    // Draw the ornament divider (Sydney); Zohn's scene draws a horizon instead.
+    val ornament: Boolean = true,
+    val italicGreeting: Boolean = false,
+    val sky1: Color = Color.Transparent,
+    val sky2: Color = Color.Transparent,
+    val sky3: Color = Color.Transparent,
+    val horizon: Color = Color.Transparent,
+    val ground: Color = Color.Transparent,
+    val sunTop: Color = Color.Transparent,
+    val sunMid: Color = Color.Transparent,
+    val sunBottom: Color = Color.Transparent,
+    val gridH: Color = Color.Transparent,
+    val gridV: Color = Color.Transparent,
+    val starAlpha: Float = 0f,
+    val gridAlpha: Float = 0f,
+    // 0 = no focus bloom (night low-glare).
+    val glowStrength: Float = 1f,
 )
 
 @OptIn(androidx.compose.ui.text.ExperimentalTextApi::class)
@@ -36,26 +61,15 @@ val Playfair = FontFamily(
     ),
 )
 
-// Zohn: baroque-futurist, gold on black.
-val ZohnPalette = LauncherPalette(
-    background = Ink,
-    surface = Walnut,
-    accent = Gold,
-    glow = Gold,
-    secondary = Oxblood,
-    text = Ivory,
-    display = Cinzel,
+@OptIn(androidx.compose.ui.text.ExperimentalTextApi::class)
+val Orbitron = FontFamily(
+    Font(R.font.orbitron, FontWeight.Normal, variationSettings = FontVariation.Settings(FontVariation.weight(500))),
+    Font(R.font.orbitron, FontWeight.SemiBold, variationSettings = FontVariation.Settings(FontVariation.weight(700))),
 )
 
-// Sydney: Monet's Water Lilies, daylight pond.
-val SydneyPalette = LauncherPalette(
-    background = Color(0xFFDCE7EE), // pale water / sky
-    surface = Color(0xFFEEF2EC),    // mist
-    accent = Color(0xFF6E8F7A),     // sage green
-    glow = Color(0xFF8C7BC0),       // violet
-    secondary = Color(0xFFE6A3B4),  // lily pink
-    text = Color(0xFF22313A),       // deep blue-grey
-    display = Playfair,
+@OptIn(androidx.compose.ui.text.ExperimentalTextApi::class)
+val JetBrainsMono = FontFamily(
+    Font(R.font.jetbrains_mono, FontWeight.Normal, variationSettings = FontVariation.Settings(FontVariation.weight(400))),
 )
 
-val LocalPalette = staticCompositionLocalOf { ZohnPalette }
+val LocalPalette = staticCompositionLocalOf<LauncherPalette> { error("No palette provided") }
