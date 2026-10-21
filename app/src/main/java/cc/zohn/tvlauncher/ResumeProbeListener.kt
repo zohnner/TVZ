@@ -59,6 +59,7 @@ class ResumeProbeListener : NotificationListenerService() {
     }
 
     private fun sync(list: List<MediaController>) {
+        Log.d(TAG, "resume: sessions ${list.map { it.packageName }}")
         val live = list.map { it.sessionToken }.toSet()
         tracked.keys.filter { it !in live }.forEach { tracked.remove(it)?.end() }
         for (c in list) {
@@ -135,6 +136,7 @@ class ResumeProbeListener : NotificationListenerService() {
             }
             val wasInRun = inRun
             inRun = isPlaybackRun(s)
+            if (wasInRun != inRun) Log.d(TAG, "resume: $pkg ${if (inRun) "playing" else "stopped ($s)"}, played ${played() / 1000}s")
             if (wasInRun && !inRun) save() // paused / stopped
         }
 
