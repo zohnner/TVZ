@@ -34,7 +34,7 @@ Working on the TV:
 - The grid scroll pauses while the remote is in use and resumes after 2 s idle.
 
 Not done / open:
-- **Wallpaper** image: Zohn will supply one; a gradient placeholder is drawn in `Background.kt`.
+- Zohn's day phase: the high sun sits behind the top-right clock/date/weather/quick-action icons, and the purple date/weather text over the orange sun stripes is hard to read; pending Zohn's design decision (see task-10 walkthrough).
 - The idle gallery hasn't been watched end-to-end on the TV yet (it needs ~9.5 min of no input).
 - Navigation runs ~24 ms/frame (GPU ~8 ms); the rest is CPU. See DESIGN.md → Performance.
 
