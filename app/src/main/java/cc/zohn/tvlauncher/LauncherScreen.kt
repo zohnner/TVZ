@@ -52,6 +52,9 @@ import kotlinx.coroutines.delay
 class LauncherActions(
     val launch: (AppEntry) -> Unit,
     val setHidden: (AppEntry, hidden: Boolean) -> Unit,
+    val setInputHidden: (InputEntry, hidden: Boolean) -> Unit,
+    // null clears the override (automatic name).
+    val setInputName: (InputEntry, String?) -> Unit,
     val appInfo: (AppEntry) -> Unit,
     val toggleShowHidden: () -> Unit,
     val openInput: (InputEntry) -> Unit,
@@ -74,7 +77,7 @@ class DailyArt(val artwork: Artwork, val image: ImageBitmap, val phase: Phase, v
  */
 @Stable
 private class FocusInfo {
-    var app by mutableStateOf<AppEntry?>(null)
+    var item by mutableStateOf<DockItem?>(null)
     // Label of a focused quick action, shown in the hero instead of an app name.
     var action by mutableStateOf<String?>(null)
 }
@@ -84,7 +87,7 @@ fun LauncherScreen(
     palette: LauncherPalette,
     mood: MoodState,
     profile: Profile,
-    apps: List<AppEntry>,
+    dock: List<DockItem>,
     hidden: Set<String>,
     showHidden: Boolean,
     inputs: List<InputEntry>,
@@ -98,6 +101,9 @@ fun LauncherScreen(
 ) = CompositionLocalProvider(LocalPalette provides palette) {
     val focus = remember { FocusInfo() }
     var menuApp by remember { mutableStateOf<AppEntry?>(null) }
+    var menuInput by remember { mutableStateOf<InputEntry?>(null) }
+    var renameInput by remember { mutableStateOf<InputEntry?>(null) }
+    var typeInput by remember { mutableStateOf<InputEntry?>(null) }
     var inputsOpen by remember { mutableStateOf(false) }
     var refocusDock by remember { mutableIntStateOf(0) }
     var galleryOn by remember(profile) { mutableStateOf(false) }
@@ -166,7 +172,7 @@ fun LauncherScreen(
                         )
                         Spacer(Modifier.height(6.dp))
                     }
-                    Hero(focus, fallback = apps.firstOrNull(), hidden = hidden, greeting = greeting)
+                    Hero(focus, fallback = dock.firstOrNull(), hidden = hidden, greeting = greeting)
                 }
                 Spacer(Modifier.height(20.dp))
                 Box(
@@ -177,15 +183,25 @@ fun LauncherScreen(
                     }
                 ) { OrnamentDivider() }
                 Dock(
-                    apps = apps,
+                    items = dock,
                     hidden = hidden,
                     refocusRequest = refocusDock,
                     onFocused = {
-                        focus.app = it
+                        focus.item = it
                         focus.action = null
                     },
-                    onLaunch = actions.launch,
-                    onMenu = { menuApp = it },
+                    onLaunch = {
+                        when (it) {
+                            is DockItem.App -> actions.launch(it.app)
+                            is DockItem.Input -> actions.openInput(it.input)
+                        }
+                    },
+                    onMenu = {
+                        when (it) {
+                            is DockItem.App -> menuApp = it.app
+                            is DockItem.Input -> menuInput = it.input
+                        }
+                    },
                 )
             }
         }
@@ -211,20 +227,51 @@ fun LauncherScreen(
             onDismiss = { menuApp = null },
         )
     }
+    menuInput?.let { input ->
+        val isHidden = input.hiddenKey in hidden
+        InputMenuDialog(
+            input = input,
+            isHidden = isHidden,
+            onRename = { renameInput = input },
+            onToggleHidden = {
+                actions.setInputHidden(input, !isHidden)
+                if (!isHidden && !showHidden) refocusDock++
+            },
+            onInput = actions.onInput,
+            onDismiss = { menuInput = null },
+        )
+    }
+    renameInput?.let { input ->
+        InputRenameDialog(
+            input = input,
+            onPick = { actions.setInputName(input, it) },
+            onType = { typeInput = input },
+            onInput = actions.onInput,
+            onDismiss = { renameInput = null },
+        )
+    }
+    typeInput?.let { input ->
+        InputNameDialog(
+            input = input,
+            onSave = { actions.setInputName(input, it) },
+            onInput = actions.onInput,
+            onDismiss = { typeInput = null },
+        )
+    }
     if (inputsOpen) {
         InputPickerDialog(inputs, onPick = actions.openInput, onInput = actions.onInput, onDismiss = { inputsOpen = false })
     }
 }
 
 @Composable
-private fun Hero(focus: FocusInfo, fallback: AppEntry?, hidden: Set<String>, greeting: String?) {
+private fun Hero(focus: FocusInfo, fallback: DockItem?, hidden: Set<String>, greeting: String?) {
     val palette = LocalPalette.current
     val action = focus.action
-    val app = focus.app ?: fallback
+    val item = focus.item ?: fallback
     Crossfade(targetState = greeting, label = "greeting") { line ->
         Column {
             Text(
-                line ?: action ?: app?.label ?: "",
+                line ?: action ?: item?.title ?: "",
                 fontFamily = palette.display,
                 fontWeight = FontWeight.SemiBold,
                 fontStyle = if (line != null && palette.italicGreeting) FontStyle.Italic else FontStyle.Normal,
@@ -237,8 +284,9 @@ private fun Hero(focus: FocusInfo, fallback: AppEntry?, hidden: Set<String>, gre
                 when {
                     line != null -> ""
                     action != null -> "Press OK"
-                    app == null -> "Loading…"
-                    app.packageName in hidden -> "Hidden  ·  hold OK for options"
+                    item == null -> "Loading…"
+                    item.key in hidden -> "Hidden  ·  hold OK for options"
+                    item is DockItem.Input -> "${item.input.label}  ·  press OK to switch  ·  hold for options"
                     else -> "Press OK to open  ·  hold for options"
                 },
                 fontFamily = palette.data,

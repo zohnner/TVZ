@@ -5,8 +5,11 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.media.tv.TvInputManager
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
 import android.provider.Settings
@@ -43,6 +46,15 @@ class MainActivity : ComponentActivity() {
     private var hidden by mutableStateOf<Set<String>>(emptySet())
     private var showHidden by mutableStateOf(false)
     private var inputs by mutableStateOf<List<InputEntry>>(emptyList())
+    // Launch counts for the active profile, re-read when the dock is re-sorted (resume, profile switch).
+    private var counts by mutableStateOf<Map<String, Int>>(emptyMap())
+    private var inputsJob: Job? = null
+    private val inputCallback = object : TvInputManager.TvInputCallback() {
+        override fun onInputAdded(inputId: String) = refreshInputs()
+        override fun onInputRemoved(inputId: String) = refreshInputs()
+        override fun onInputStateChanged(inputId: String, state: Int) = refreshInputs()
+        override fun onInputUpdated(inputId: String) = refreshInputs()
+    }
     private var art by mutableStateOf<DailyArt?>(null)
     // Uptime of the last remote key press. Read only from coroutines/draw, never in composition.
     private val lastInputAt = mutableLongStateOf(SystemClock.uptimeMillis())
@@ -91,6 +103,7 @@ class MainActivity : ComponentActivity() {
         prefs = LauncherPrefs(this)
         profile = prefs.activeProfile
         hidden = prefs.hidden(profile)
+        counts = prefs.launchCounts(profile)
         startMoodClock()
         lifecycleScope.launch(Dispatchers.IO) { UsageLog.trimFile(this@MainActivity, ZonedDateTime.now()) }
         ContextCompat.registerReceiver(
@@ -127,7 +140,9 @@ class MainActivity : ComponentActivity() {
                 start(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", it.packageName, null)), "App info")
             },
             toggleShowHidden = { showHidden = !showHidden },
-            openInput = { start(inputIntent(this, it), it.label) },
+            openInput = ::switchInput,
+            setInputHidden = ::setInputHidden,
+            setInputName = ::setInputName,
             openSettings = { start(Intent(it), "Settings") },
             switchProfile = ::switchProfile,
             onInput = { lastInputAt.longValue = SystemClock.uptimeMillis(); greeting = null },
@@ -148,7 +163,7 @@ class MainActivity : ComponentActivity() {
                     palette = activeOverride?.palette ?: Moods.effective(profile.id, mood),
                     mood = mood,
                     profile = profile,
-                    apps = apps.filter { showHidden || it.packageName !in hidden },
+                    dock = dockItems(apps, inputs, hidden, showHidden, counts),
                     hidden = hidden,
                     showHidden = showHidden,
                     inputs = inputs,
@@ -192,12 +207,22 @@ class MainActivity : ComponentActivity() {
         wakeQualified = false
         // Coming back from an app counts as activity: no gallery the moment you return.
         lastInputAt.longValue = SystemClock.uptimeMillis()
-        apps = sortByUse(apps)
+        counts = prefs.launchCounts(profile)
         refresh()
+        refreshInputs()
         loadArt()
     }
 
+    override fun onStart() {
+        super.onStart()
+        // Plugging a device in (or powering one on) updates the tiles while the launcher is up.
+        getSystemService(TvInputManager::class.java)
+            ?.registerCallback(inputCallback, Handler(Looper.getMainLooper()))
+    }
+
     override fun onStop() {
+        getSystemService(TvInputManager::class.java)?.unregisterCallback(inputCallback)
+        inputsJob?.cancel()
         // Nothing to animate while stopped; fast day is a debug aid and must not outlive the screen.
         moodJob?.cancel()
         if (moodClock.fastDay) moodClock.setFastDay(false)
@@ -214,7 +239,7 @@ class MainActivity : ComponentActivity() {
         prefs.activeProfile = profile
         hidden = prefs.hidden(profile)
         showHidden = false
-        apps = sortByUse(apps)
+        counts = prefs.launchCounts(profile)
         if (profile.artFocus) loadArt() else art = null // free the painting's memory
         showGreeting()
     }
@@ -234,23 +259,43 @@ class MainActivity : ComponentActivity() {
         if (refreshJob?.isActive == true) return
         refreshJob = lifecycleScope.launch {
             if (apps.isEmpty()) {
-                apps = sortByUse(withContext(Dispatchers.IO) { AppCache.load(this@MainActivity) })
+                apps = withContext(Dispatchers.IO) { AppCache.load(this@MainActivity) }
             }
             val stamp = packageStamp()
             if (apps.isEmpty() || stamp.changed) {
                 val fresh = withContext(Dispatchers.IO) {
                     loadApps(packageManager, packageName).also { AppCache.save(this@MainActivity, it) }
                 }
-                apps = sortByUse(fresh)
+                apps = fresh
                 Log.i(TAG, "rescanned ${fresh.size} apps")
             }
             // Committed only after a successful rescan, so an interrupted one is retried.
             prefs.bootCount = stamp.bootCount
             prefs.packageSeq = stamp.packageSeq
-            if (inputs.isEmpty()) {
-                inputs = withContext(Dispatchers.IO) { loadHdmiInputs(this@MainActivity) }
-            }
         }
+    }
+
+    // Cheap TvInputManager calls; debounced because a device waking up fires several callbacks.
+    private fun refreshInputs() {
+        inputsJob?.cancel()
+        inputsJob = lifecycleScope.launch {
+            delay(250)
+            val loaded = withContext(Dispatchers.IO) { loadHdmiInputs(this@MainActivity) }
+                .map { it.copy(stored = prefs.inputName(it.id)) }
+            if (loaded != inputs) inputs = loaded
+        }
+    }
+
+    // Apps and the inputs that deserve a tile, most-used first (ties alphabetical).
+    private fun dockItems(
+        apps: List<AppEntry>,
+        inputs: List<InputEntry>,
+        hidden: Set<String>,
+        showHidden: Boolean,
+        counts: Map<String, Int>,
+    ): List<DockItem> {
+        val items = apps.map { DockItem.App(it) } + inputs.filter { it.tileVisible }.map { DockItem.Input(it) }
+        return sortedByUse(items.filter { showHidden || it.key !in hidden }, counts, { it.key }, { it.title })
     }
 
     // This phase's painting for art-focused profiles; a no-op if it's already showing.
@@ -310,13 +355,6 @@ class MainActivity : ComponentActivity() {
         return PackageStamp(boot, seq, changed = !sameBoot || changes != null)
     }
 
-    private fun sortByUse(list: List<AppEntry>): List<AppEntry> {
-        val counts = prefs.launchCounts(profile)
-        return list.sortedWith(
-            compareByDescending<AppEntry> { counts[it.packageName] ?: 0 }.thenBy { it.label.lowercase() }
-        )
-    }
-
     private fun launch(app: AppEntry) {
         val intent = launchIntentFor(packageManager, app.packageName)
         if (intent == null) {
@@ -333,9 +371,27 @@ class MainActivity : ComponentActivity() {
         start(intent, app.label)
     }
 
-    private fun setHidden(app: AppEntry, hide: Boolean) {
-        hidden = if (hide) hidden + app.packageName else hidden - app.packageName
+    private fun setHidden(app: AppEntry, hide: Boolean) = setHiddenKey(app.packageName, hide)
+
+    private fun setInputHidden(input: InputEntry, hide: Boolean) = setHiddenKey(input.hiddenKey, hide)
+
+    private fun setHiddenKey(key: String, hide: Boolean) {
+        hidden = if (hide) hidden + key else hidden - key
         prefs.setHidden(profile, hidden)
+    }
+
+    private fun setInputName(input: InputEntry, name: String?) {
+        prefs.setInputName(input.id, name)
+        inputs = inputs.map { if (it.id == input.id) it.copy(stored = name) else it }
+    }
+
+    private fun switchInput(input: InputEntry) {
+        prefs.recordLaunch(profile, input.hiddenKey)
+        if (!moodClock.fastDay) {
+            val line = UsageLog.line(ZonedDateTime.now(), mood.phase, profile.id, input.hiddenKey)
+            lifecycleScope.launch(Dispatchers.IO) { UsageLog.append(this@MainActivity, line) }
+        }
+        start(inputIntent(this, input), input.title)
     }
 
     private fun start(intent: Intent, label: String) {

@@ -7,6 +7,12 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -16,6 +22,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Album
+import androidx.compose.material.icons.outlined.Cast
+import androidx.compose.material.icons.outlined.Computer
+import androidx.compose.material.icons.outlined.Input
+import androidx.compose.material.icons.outlined.LiveTv
+import androidx.compose.material.icons.outlined.Speaker
+import androidx.compose.material.icons.outlined.SportsEsports
+import androidx.compose.material.icons.outlined.Videocam
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -36,17 +51,39 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.tv.material3.ExperimentalTvMaterial3Api
+import androidx.tv.material3.Icon
+import androidx.tv.material3.Text
 import cc.zohn.tvlauncher.ui.theme.LocalPalette
 
 private val TileShape = RoundedCornerShape(10.dp)
 private val TileWidth = 208.dp
+
+/** What a dock tile can be: an app, or an HDMI input. [key] is the id used for counts and hiding. */
+sealed interface DockItem {
+    val key: String
+    val title: String
+
+    data class App(val app: AppEntry) : DockItem {
+        override val key get() = app.packageName
+        override val title get() = app.label
+    }
+
+    data class Input(val input: InputEntry) : DockItem {
+        override val key get() = input.hiddenKey
+        override val title get() = input.title
+    }
+}
 
 /**
  * @param refocusRequest bump to move focus back to the first tile (e.g. after the focused app is hidden).
@@ -54,12 +91,12 @@ private val TileWidth = 208.dp
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun Dock(
-    apps: List<AppEntry>,
+    items: List<DockItem>,
     hidden: Set<String>,
     refocusRequest: Int,
-    onFocused: (AppEntry) -> Unit,
-    onLaunch: (AppEntry) -> Unit,
-    onMenu: (AppEntry) -> Unit,
+    onFocused: (DockItem) -> Unit,
+    onLaunch: (DockItem) -> Unit,
+    onMenu: (DockItem) -> Unit,
 ) {
     val firstTile = remember { FocusRequester() }
     var initialFocusDone by remember { mutableStateOf(false) }
@@ -71,21 +108,25 @@ fun Dock(
         // Coming back down from the quick actions lands on the tile you left, not the nearest one.
         modifier = Modifier.fillMaxWidth().focusRestorer(firstTile),
     ) {
-        itemsIndexed(apps, key = { _, app -> app.packageName }) { index, app ->
+        itemsIndexed(items, key = { _, item -> item.key }) { index, item ->
             DockTile(
-                app = app,
-                isHidden = app.packageName in hidden,
+                isHidden = item.key in hidden,
                 focusRequester = if (index == 0) firstTile else null,
-                onFocused = { onFocused(app) },
-                onClick = { onLaunch(app) },
-                onMenu = { onMenu(app) },
-            )
+                onFocused = { onFocused(item) },
+                onClick = { onLaunch(item) },
+                onMenu = { onMenu(item) },
+            ) { focused ->
+                when (item) {
+                    is DockItem.App -> AppTileContent(item.app)
+                    is DockItem.Input -> InputTileContent(item.input, focused)
+                }
+            }
         }
     }
 
     // Focus the first tile on first load, and whenever a refocus is requested.
-    LaunchedEffect(apps.isNotEmpty(), refocusRequest) {
-        if (apps.isEmpty() || (initialFocusDone && refocusRequest == 0)) return@LaunchedEffect
+    LaunchedEffect(items.isNotEmpty(), refocusRequest) {
+        if (items.isEmpty() || (initialFocusDone && refocusRequest == 0)) return@LaunchedEffect
         withFrameNanos { }
         if (runCatching { firstTile.requestFocus() }.isSuccess) initialFocusDone = true
     }
@@ -93,12 +134,12 @@ fun Dock(
 
 @Composable
 private fun DockTile(
-    app: AppEntry,
     isHidden: Boolean,
     focusRequester: FocusRequester?,
     onFocused: () -> Unit,
     onClick: () -> Unit,
     onMenu: () -> Unit,
+    content: @Composable BoxScope.(focused: Boolean) -> Unit,
 ) {
     val palette = LocalPalette.current
     var focused by remember { mutableStateOf(false) }
@@ -184,10 +225,57 @@ private fun DockTile(
                 shape = TileShape,
             ),
     ) {
-        if (app.isBanner) {
-            Image(app.image, app.label, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-        } else {
-            Image(app.image, app.label, Modifier.fillMaxHeight(0.62f).aspectRatio(1f))
-        }
+        content(focused)
+    }
+}
+
+@Composable
+private fun AppTileContent(app: AppEntry) {
+    if (app.isBanner) {
+        Image(app.image, app.label, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+    } else {
+        Image(app.image, app.label, Modifier.fillMaxHeight(0.62f).aspectRatio(1f))
+    }
+}
+
+private fun InputKind.icon(): ImageVector = when (this) {
+    InputKind.BLU_RAY -> Icons.Outlined.Album
+    InputKind.GAME_CONSOLE -> Icons.Outlined.SportsEsports
+    InputKind.CABLE_BOX -> Icons.Outlined.LiveTv
+    InputKind.STREAMING_STICK -> Icons.Outlined.Cast
+    InputKind.SOUNDBAR -> Icons.Outlined.Speaker
+    InputKind.PC -> Icons.Outlined.Computer
+    InputKind.CAMERA -> Icons.Outlined.Videocam
+    InputKind.UNKNOWN -> Icons.Outlined.Input
+}
+
+// Drawn in the active palette only: surface is the tile's background (set by the shared chrome).
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun BoxScope.InputTileContent(input: InputEntry, focused: Boolean) {
+    val palette = LocalPalette.current
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 10.dp)) {
+        Icon(
+            input.kind.icon(),
+            contentDescription = input.title,
+            tint = if (focused) palette.text else palette.accent,
+            modifier = Modifier.size(52.dp),
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            input.title,
+            fontFamily = palette.display,
+            fontSize = 20.sp,
+            color = palette.text,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            input.label,
+            fontFamily = palette.data,
+            fontSize = 13.sp,
+            color = palette.text.copy(alpha = 0.7f),
+            maxLines = 1,
+        )
     }
 }

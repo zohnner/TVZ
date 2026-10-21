@@ -7,6 +7,7 @@ private const val KEY_PACKAGE_SEQ = "pkgSeq"
 private const val KEY_BOOT_COUNT = "bootCount"
 private const val KEY_PROFILE = "profile"
 private const val COUNT_PREFIX = "count:"
+private const val INPUT_NAME_PREFIX = "inputName:"
 
 /**
  * Per-profile keys are prefixed "<profile id>:". Zohn's use the bare keys (his was the only
@@ -38,6 +39,12 @@ class LauncherPrefs(context: Context) {
         val key = key(profile, COUNT_PREFIX + packageName)
         prefs.edit().putInt(key, prefs.getInt(key, 0) + 1).apply()
     }
+
+    // Input names describe the physical port, so both profiles share them.
+    fun inputName(id: String): String? = prefs.getString(INPUT_NAME_PREFIX + id, null)
+
+    fun setInputName(id: String, value: String?) =
+        prefs.edit().apply { if (value == null) remove(INPUT_NAME_PREFIX + id) else putString(INPUT_NAME_PREFIX + id, value) }.apply()
 
     var packageSeq: Int
         get() = prefs.getInt(KEY_PACKAGE_SEQ, 0)

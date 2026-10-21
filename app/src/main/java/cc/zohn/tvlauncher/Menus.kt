@@ -5,6 +5,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -29,6 +32,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
@@ -69,9 +77,91 @@ fun AppMenuDialog(
 fun InputPickerDialog(inputs: List<InputEntry>, onPick: (InputEntry) -> Unit, onInput: () -> Unit, onDismiss: () -> Unit) {
     MenuPanel("Inputs", onInput, onDismiss) {
         inputs.forEachIndexed { index, input ->
-            MenuButton(input.label, initialFocus = index == 0) { onPick(input); onDismiss() }
+            MenuButton(input.menuLabel, initialFocus = index == 0) { onPick(input); onDismiss() }
         }
         MenuButton("Cancel", initialFocus = inputs.isEmpty(), onClick = onDismiss)
+    }
+}
+
+@Composable
+fun InputMenuDialog(
+    input: InputEntry,
+    isHidden: Boolean,
+    onRename: () -> Unit,
+    onToggleHidden: () -> Unit,
+    onInput: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    MenuPanel(input.title, onInput, onDismiss) {
+        MenuButton("Rename…", initialFocus = true) { onRename(); onDismiss() }
+        MenuButton(if (isHidden) "Unhide" else "Hide from Zohn TV") { onToggleHidden(); onDismiss() }
+        MenuButton("Cancel", onClick = onDismiss)
+    }
+}
+
+/** [onPick] gets a kind name, or null for "Use automatic name"; [onType] opens the text dialog. */
+@Composable
+fun InputRenameDialog(
+    input: InputEntry,
+    onPick: (String?) -> Unit,
+    onType: () -> Unit,
+    onInput: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    MenuPanel("Name for ${input.label}", onInput, onDismiss) {
+        InputKind.entries.filter { it != InputKind.UNKNOWN }.forEachIndexed { index, kind ->
+            MenuButton(kind.display, initialFocus = index == 0) { onPick(kind.name); onDismiss() }
+        }
+        MenuButton("Type a name…") { onType(); onDismiss() }
+        MenuButton("Use automatic name") { onPick(null); onDismiss() }
+        MenuButton("Cancel", onClick = onDismiss)
+    }
+}
+
+@Composable
+fun InputNameDialog(input: InputEntry, onSave: (String) -> Unit, onInput: () -> Unit, onDismiss: () -> Unit) {
+    val palette = LocalPalette.current
+    var text by remember { mutableStateOf(TextFieldValue(input.stored?.takeIf { storedKind(it) == null } ?: "")) }
+    val field = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    fun save() {
+        val name = text.text.trim()
+        if (name.isNotEmpty()) onSave(name)
+        onDismiss()
+    }
+    MenuPanel("Name for ${input.label}", onInput, onDismiss) {
+        var focused by remember { mutableStateOf(false) }
+        BasicTextField(
+            value = text,
+            onValueChange = { text = it },
+            singleLine = true,
+            textStyle = TextStyle(color = palette.text, fontSize = 22.sp),
+            cursorBrush = SolidColor(palette.glow),
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { save() }),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp)
+                .focusRequester(field)
+                .onFocusChanged { focused = it.isFocused }
+                .clip(ButtonShape)
+                .background(if (focused) palette.glow.copy(alpha = 0.2f) else Color.Transparent)
+                .border(
+                    width = if (focused) 2.dp else 1.dp,
+                    color = if (focused) palette.glow else palette.accent.copy(alpha = 0.15f),
+                    shape = ButtonShape,
+                )
+                .padding(horizontal = 20.dp, vertical = 14.dp),
+        )
+        MenuButton("OK") { save() }
+        MenuButton("Cancel", onClick = onDismiss)
+    }
+    LaunchedEffect(Unit) {
+        // The dialog window attaches a frame or two after composition.
+        withFrameNanos { }
+        withFrameNanos { }
+        runCatching { field.requestFocus() }
+        keyboard?.show()
     }
 }
 
