@@ -11,3 +11,6 @@ local.properties
 
 # Kotlin compiler caches
 .kotlin
+
+# Brainstorm companion mockups
+.superpowers/
