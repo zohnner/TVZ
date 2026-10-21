@@ -28,6 +28,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.time.ZonedDateTime
 
 private const val TAG = "TvLauncher"
 private const val GALLERY_IDLE_MS = 10 * 60_000L
@@ -81,6 +82,7 @@ class MainActivity : ComponentActivity() {
         profile = prefs.activeProfile
         hidden = prefs.hidden(profile)
         startMoodClock()
+        lifecycleScope.launch(Dispatchers.IO) { UsageLog.trimFile(this@MainActivity, ZonedDateTime.now()) }
         ContextCompat.registerReceiver(
             this,
             timeReceiver,
@@ -305,6 +307,8 @@ class MainActivity : ComponentActivity() {
             return
         }
         prefs.recordLaunch(profile, app.packageName)
+        val line = UsageLog.line(ZonedDateTime.now(), mood.phase, profile.id, app.packageName)
+        lifecycleScope.launch(Dispatchers.IO) { UsageLog.append(this@MainActivity, line) }
         start(intent, app.label)
     }
 
