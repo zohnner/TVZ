@@ -72,8 +72,15 @@ fun renderSunsetScene(p: LauncherPalette, sunElevation: Double, horizonFraction:
         // Sun: height follows real elevation; striped lower half; clipped at the horizon.
         if (sunElevation > SUN_HIDDEN_BELOW) {
             val radius = w * SUN_RADIUS
-            val lift = (sunElevation / SUN_FULL_ELEVATION).coerceIn(-0.3, 1.0).toFloat()
-            val center = Offset(w * SUN_CENTER_X, horizonY - lift * horizonY * 0.55f)
+            // Above the horizon the sun climbs with elevation (center on the horizon at 0 degrees);
+            // below it sinks linearly so its top edge meets the horizon exactly when it is hidden.
+            val centerY = if (sunElevation >= 0.0) {
+                val lift = (sunElevation / SUN_FULL_ELEVATION).coerceAtMost(1.0).toFloat()
+                horizonY - lift * horizonY * 0.55f
+            } else {
+                horizonY + radius * (sunElevation / SUN_HIDDEN_BELOW).toFloat()
+            }
+            val center = Offset(w * SUN_CENTER_X, centerY)
             clipRect(bottom = horizonY) {
                 val sunBrush = Brush.verticalGradient(
                     0f to p.sunTop, 0.6f to p.sunMid, 1f to p.sunBottom,
