@@ -189,13 +189,7 @@ object ArtRepository {
             .map { if (json.isNull(it)) "" else json.optString(it) }
             .firstOrNull { it.isNotBlank() } ?: return null
         val text = Html.fromHtml(raw, Html.FROM_HTML_MODE_LEGACY).toString().replace(Regex("\\s+"), " ").trim()
-        val fact = StringBuilder()
-        for (sentence in text.split(Regex("(?<=[.!?])\\s+"))) {
-            if (fact.isNotEmpty() && fact.length + sentence.length > MAX_FACT_CHARS) break
-            if (fact.isNotEmpty()) fact.append(' ')
-            fact.append(sentence)
-        }
-        return fact.toString().takeIf { it.isNotBlank() }
+        return cleanFact(text)
     }
 
     private fun prune(dir: File) {
@@ -226,4 +220,18 @@ object ArtRepository {
         imageId = getString("imageId"),
         fact = if (isNull("fact")) null else getString("fact"),
     )
+}
+
+private val BOILERPLATE = Regex("click here|learn more", RegexOption.IGNORE_CASE)
+
+/** First sentence or two of [text], minus museum boilerplate ("Click here to learn more..."). */
+fun cleanFact(text: String): String? {
+    val fact = StringBuilder()
+    for (sentence in text.trim().split(Regex("(?<=[.!?])\\s+"))) {
+        if (sentence.isBlank() || BOILERPLATE.containsMatchIn(sentence)) continue
+        if (fact.isNotEmpty() && fact.length + sentence.length > MAX_FACT_CHARS) break
+        if (fact.isNotEmpty()) fact.append(' ')
+        fact.append(sentence)
+    }
+    return fact.toString().takeIf { it.isNotBlank() }
 }
