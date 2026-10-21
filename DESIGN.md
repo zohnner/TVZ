@@ -20,6 +20,7 @@ Any new visual feature: ask Zohn about style, colors and effects **before** buil
 - Hold OK (or press Menu) on a tile: menu with Hide / Unhide, App info, Show hidden apps.
 - **Input tiles** share the dock and its ordering (counts keyed `input:<id>`). Same size, focus scale, glow and border as app tiles; content is a large outlined icon (`palette.accent`, focused `palette.text`), the title in `palette.display` and the port in `palette.data`, on `palette.surface`. Hold OK / Menu: Rename (kind list, typed name, automatic) / Hide. Ports with no CEC device, no connection and no user name stay out of the dock but remain in the Inputs menu.
   Hidden apps, when shown, are dimmed.
+- **Resume tiles** (up to 3) come before everything else in the dock, newest first; key `resume:<package>`. Same chrome as app tiles. Look (Zohn's pick "App banner + overlay", 2026-10-21): the app's banner under a `palette.background` veil at 66%, then bottom-left "▶ RESUME" (`palette.data`, `palette.glow`), the episode title or app label (`palette.display`, one line), and a 3 dp progress bar (`palette.glow` over `palette.accent` at 30%) when the app gives a duration, else "12 min in" (`palette.data`). Hero: title, then "Peacock · 12 min in · press OK to resume · hold for options". Hold OK / Menu: Dismiss / Never track <App> / Cancel. Palette colors only.
 - Menus: dark panel in the profile's surface color, thin accent border, display-font title, glow-highlighted focused row.
 
 ## Zohn: Sunset grid

@@ -6,7 +6,7 @@ Developer Mode. Kotlin + Jetpack Compose (Compose for TV). Moods through the day
 **Read before changing anything:** [RULES.md](RULES.md) (hard rules + amendments) and
 [DESIGN.md](DESIGN.md) (look, layout, and the performance rules the design depends on).
 
-## Status (2026-10-20)
+## Status (2026-10-21)
 
 Working on the TV:
 - Lists every TV app (`LEANBACK_LAUNCHER` query), launches it, Back returns to the launcher.
@@ -29,6 +29,10 @@ Working on the TV:
   (dawn, garden, sunset, night); night dims the painting and lightens the text.
 - **Greeting on wake:** "Good morning, {name}" etc. for ~4 s when the launcher shows right after the TV
   slept 30+ minutes, and on profile switch. Any key skips it.
+- **Resume tiles:** up to 3 tiles at the front of the dock, the last thing watched in each of the last
+  3 apps (per profile, 7 days). Recorded from media sessions after 2 min of real playing time; OK opens
+  the app (apps publish no deep link, so you land where the app puts you). Hold OK → Dismiss / Never track.
+  Needs notification access, see "Resume tiles" below.
 - **Usage log:** every dock launch is appended to `files/usage.log` (time, weekday, hour, phase, profile,
   package; 90 days kept). Nothing reads it yet; it's for the planned Habits feature.
 - **Fast-day debug:** hold Menu on the profile name to play a whole day in ~2 minutes (toast "Fast day on/off").
@@ -57,11 +61,13 @@ Not verified on the TV yet:
 | `SunsetScene.kt` | Renders Zohn's sky/sun/horizon scene and grid floor bitmaps |
 | `Greeting.kt` | Wake detection and greeting text |
 | `UsageLog.kt` | Launch history file for the Habits feature |
+| `ResumeProbeListener.kt` | Notification listener that watches other apps' media sessions and records Resume entries |
+| `Resume.kt` | Pure, unit-tested: `ResumeEntry`, `upsert`, `visibleResumes`, `shouldRecord`, `resumeSubtitle` |
 | `TopBar.kt` | Wordmark, clock, weather line, quick-action buttons |
-| `Dock.kt` | App + input row (`DockItem`); shared tile chrome (focus, glow, keys) with app / input content |
+| `Dock.kt` | Resume + app + input row (`DockItem`); shared tile chrome (focus, glow, keys) with per-kind content |
 | `Menus.kt` | App menu, input picker, input menu / rename picker / name entry dialogs |
 | `AppRepository.kt` | App discovery (`LEANBACK_LAUNCHER`), launch intents, on-disk app cache |
-| `LauncherPrefs.kt` | Active profile; per-profile hidden apps + launch counts; per-port input names (shared); package-change bookkeeping |
+| `LauncherPrefs.kt` | Active profile; per-profile hidden apps, launch counts, Resume entries + never-track set; per-port input names (shared); package-change bookkeeping |
 | `TvInputs.kt` | HDMI ports via `TvInputManager` (+ CEC child device name/type by reflection), passthrough intents |
 | `InputNames.kt` | Pure, unit-tested: `inputKind`, `showInputTile`, `inputTitle`, `portLabel`, `sortedByUse` |
 | `Weather.kt` | Open-Meteo fetch + `WEATHER_CITY` setting |
@@ -74,7 +80,7 @@ Not verified on the TV yet:
 
 ## Tests
 
-`./gradlew.bat testDebugUnitTest` (JVM unit tests: SunCalc, Mood, Moods, art subjects, greeting, usage log, input names).
+`./gradlew.bat testDebugUnitTest` (JVM unit tests: SunCalc, Mood, Moods, art subjects, greeting, usage log, input names, resume helpers).
 
 ## Build & deploy
 
@@ -132,6 +138,18 @@ accessibility service) watches for the stock launcher's **home activity only** a
 forward. Its other screens (quick settings panel, input picker) are left alone. It must be switched
 on by hand: Settings → Accessibility → **Zohn TV Home button** (done on 2026-10-20). The HOME role
 was also set with `cmd package set-home-activity`, which makes the TV boot into Zohn TV.
+
+## Resume tiles
+
+Android's Watch Next provider is empty on this TV, so Zohn TV reads media sessions instead, which
+needs notification access for `cc.zohn.tvlauncher/.ResumeProbeListener` (the name comes from the
+feasibility probe; renaming the class loses the access). It's turned on by hand on the TV, in
+Settings under the apps' special app access → Notification access → **Zohn TV** (done on 2026-10-21). Never grant it over adb.
+Check (read-only): `adb shell dumpsys notification | grep ResumeProbeListener`. Recordings log
+`resume: <package> "<title>" at <s>s for <profile>` under `adb logcat -s TvLauncher`.
+
+What apps publish varies: Peacock gives the episode title and position, no duration (so its tile shows
+"12 min in" instead of a progress bar) and no series name or deep link.
 
 ## Reverting to stock (one step, always)
 

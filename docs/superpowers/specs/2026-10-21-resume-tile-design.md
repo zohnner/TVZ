@@ -1,4 +1,4 @@
-# Resume tile — design (approved by Zohn 2026-10-21, not yet built)
+# Resume tile — design (approved by Zohn 2026-10-21, built on branch resume-tile)
 
 Goal: "click back onto the last show I was binging." Up to 3 Resume tiles at the front of the dock — the most recent thing watched in each of the last 3 apps, per profile.
 
