@@ -86,7 +86,7 @@ Secondary (lily pink) stays #E6A3B4 except at night (#8FB59A sage).
 - Wallpaper: one painting per phase from the Art Institute of Chicago's public-domain Impressionists,
   chosen by the phase's subjects (title match first). Fallback: any piece by the day's painter, any cached
   painting, then a pond placeholder. Each crossfades in at its phase midpoint; fetched lazily, cached.
-- Blends: during a light/dark blend Sydney's text and wordmark pick the higher-contrast endpoint against the blended background (never a lerped mid-grey).
+- Blends: during a light/dark blend Sydney's text and wordmark pick the higher-contrast endpoint against the blended background (never a lerped mid-grey). Accent and glow lean toward the text color ("ink", Zohn's pick 2026-10-21) just enough to stay as readable as the weaker endpoint (max 3:1), then return to the lily colors. Dark-to-dark blends (all of Zohn's) lerp everything.
 - Mist layer (pre-rendered) over the painting: top band, a stronger patch behind the clock/date/weather,
   a left fade behind the hero, and a bottom fade behind the dock. At night it becomes the dark veil
   (painting ~55% visible). No app backdrop and no drift.

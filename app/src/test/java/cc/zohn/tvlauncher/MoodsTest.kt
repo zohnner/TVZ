@@ -76,6 +76,23 @@ class MoodsTest {
         }
     }
 
+    @Test fun sydneyAccentAndGlowLeanTowardInkMidBlend() {
+        val pairs = listOf(Phase.EVENING to Phase.NIGHT, Phase.NIGHT to Phase.MORNING)
+        for ((from, to) in pairs) {
+            val x = Moods.palette("sydney", from)
+            val y = Moods.palette("sydney", to)
+            for (t in listOf(0.1f, 0.2f, 0.35f, 0.5f, 0.65f, 0.8f, 0.9f)) {
+                val m = blendPalettes(x, y, t)
+                for ((name, pick) in listOf<Pair<String, (LauncherPalette) -> Color>>("accent" to { it.accent }, "glow" to { it.glow })) {
+                    // As readable as the weaker endpoint (capped at 3:1), so nothing jumps when the blend ends.
+                    val target = minOf(3f, contrastRatio(pick(x), x.background), contrastRatio(pick(y), y.background))
+                    val got = contrastRatio(pick(m), m.background)
+                    assertTrue("$from->$to t=$t $name $got < $target", got >= target - 0.05f)
+                }
+            }
+        }
+    }
+
     @Test fun fullNightOnlyOutsideBlends() {
         assertTrue(MoodState(Phase.NIGHT, Phase.MORNING, 0f, -20.0).isFullNight)
         assertFalse(MoodState(Phase.EVENING, Phase.NIGHT, 0.6f, -10.0).isFullNight) // phase is NIGHT already

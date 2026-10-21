@@ -23,6 +23,28 @@ fun contrastRatio(x: Color, y: Color): Float {
 
 private fun isLight(c: Color) = c.luminance() > 0.2f
 
+/**
+ * Zohn's pick for Sydney's light<->dark blends ("lean toward ink"): no lily color reads on the
+ * mid-grey halfway point, so mix [color] toward the text color just enough to be as readable as
+ * the weaker endpoint (capped at 3:1). Endpoints and dark-to-dark blends are left alone.
+ */
+private fun inked(
+    color: Color,
+    text: Color,
+    background: Color,
+    crossesLightDark: Boolean,
+    from: Pair<Color, Color>,
+    to: Pair<Color, Color>,
+): Color {
+    if (!crossesLightDark) return color
+    val target = minOf(3f, contrastRatio(from.first, from.second), contrastRatio(to.first, to.second))
+    for (step in 0..20) {
+        val mixed = lerp(color, text, step / 20f)
+        if (contrastRatio(mixed, background) >= target) return mixed
+    }
+    return text
+}
+
 fun blendPalettes(a: LauncherPalette, b: LauncherPalette, t: Float): LauncherPalette {
     if (t <= 0f) return a
     if (t >= 1f) return b
@@ -38,13 +60,14 @@ fun blendPalettes(a: LauncherPalette, b: LauncherPalette, t: Float): LauncherPal
         contrastRatio(x, background) >= contrastRatio(y, background) -> x
         else -> y
     }
+    val text = readable(a.text, b.text)
     return LauncherPalette(
         background = background,
         surface = c(a.surface, b.surface),
-        accent = c(a.accent, b.accent),
-        glow = c(a.glow, b.glow),
+        accent = inked(c(a.accent, b.accent), text, background, crossesLightDark, a.accent to a.background, b.accent to b.background),
+        glow = inked(c(a.glow, b.glow), text, background, crossesLightDark, a.glow to a.background, b.glow to b.background),
         secondary = c(a.secondary, b.secondary),
-        text = readable(a.text, b.text),
+        text = text,
         display = if (second) b.display else a.display,
         data = if (second) b.data else a.data,
         wordmark = readable(a.wordmark, b.wordmark),
