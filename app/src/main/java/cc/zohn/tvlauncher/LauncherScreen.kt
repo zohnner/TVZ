@@ -1,6 +1,7 @@
 package cc.zohn.tvlauncher
 
 import android.os.SystemClock
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -152,7 +153,7 @@ fun LauncherScreen(
                     belowName = { if (art != null) ArtCard(art.artwork) },
                 )
                 Spacer(Modifier.weight(1f))
-                Hero(focus, fallback = apps.firstOrNull(), hidden = hidden)
+                Hero(focus, fallback = apps.firstOrNull(), hidden = hidden, greeting = greeting)
                 Spacer(Modifier.height(20.dp))
                 Box(
                     Modifier.onGloballyPositioned {
@@ -201,32 +202,36 @@ fun LauncherScreen(
 }
 
 @Composable
-private fun Hero(focus: FocusInfo, fallback: AppEntry?, hidden: Set<String>) {
+private fun Hero(focus: FocusInfo, fallback: AppEntry?, hidden: Set<String>, greeting: String?) {
     val palette = LocalPalette.current
     val action = focus.action
     val app = focus.app ?: fallback
-    Column {
-        Text(
-            action ?: app?.label ?: "",
-            fontFamily = palette.display,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = 64.sp,
-            color = palette.text,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Text(
-            when {
-                action != null -> "Press OK"
-                app == null -> "Loading…"
-                app.packageName in hidden -> "Hidden  ·  hold OK for options"
-                else -> "Press OK to open  ·  hold for options"
-            },
-            fontFamily = palette.data,
-            fontSize = 18.sp,
-            letterSpacing = 2.sp,
-            color = palette.text.copy(alpha = 0.6f),
-        )
+    Crossfade(targetState = greeting, label = "greeting") { line ->
+        Column {
+            Text(
+                line ?: action ?: app?.label ?: "",
+                fontFamily = palette.display,
+                fontWeight = FontWeight.SemiBold,
+                fontStyle = if (line != null && palette.italicGreeting) FontStyle.Italic else FontStyle.Normal,
+                fontSize = 64.sp,
+                color = palette.text,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                when {
+                    line != null -> ""
+                    action != null -> "Press OK"
+                    app == null -> "Loading…"
+                    app.packageName in hidden -> "Hidden  ·  hold OK for options"
+                    else -> "Press OK to open  ·  hold for options"
+                },
+                fontFamily = palette.data,
+                fontSize = 18.sp,
+                letterSpacing = 2.sp,
+                color = palette.text.copy(alpha = 0.6f),
+            )
+        }
     }
 }
 

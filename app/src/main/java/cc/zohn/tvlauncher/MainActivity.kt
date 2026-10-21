@@ -51,6 +51,14 @@ class MainActivity : ComponentActivity() {
     private var mood by mutableStateOf(moodClock.state())
     private var themeOverride by mutableStateOf<ThemeOverride?>(null)
     private var moodJob: Job? = null
+    private var greeting by mutableStateOf<String?>(null)
+    private var greetingJob: Job? = null
+    private var screenOffAt: Long? = null
+    private val screenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (screenOffAt == null) screenOffAt = SystemClock.elapsedRealtime()
+        }
+    }
     // Time/zone/date changes invalidate the sun maths: restart the clock.
     private val timeReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) = startMoodClock()
@@ -72,6 +80,15 @@ class MainActivity : ComponentActivity() {
             },
             ContextCompat.RECEIVER_NOT_EXPORTED,
         )
+        ContextCompat.registerReceiver(
+            this,
+            screenReceiver,
+            IntentFilter().apply {
+                addAction(Intent.ACTION_SCREEN_OFF)
+                addAction(Intent.ACTION_DREAMING_STARTED)
+            },
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
 
         // This is the Home screen: Back has nowhere to go.
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -88,7 +105,7 @@ class MainActivity : ComponentActivity() {
             openInput = { start(inputIntent(this, it), it.label) },
             openSettings = { start(Intent(it), "Settings") },
             switchProfile = ::switchProfile,
-            onInput = { lastInputAt.longValue = SystemClock.uptimeMillis() },
+            onInput = { lastInputAt.longValue = SystemClock.uptimeMillis(); greeting = null },
             galleryShowing = ::keepAwakeForGallery,
             loadGallery = { ArtRepository.gallery(it) },
             galleryImage = { ArtRepository.image(this, it) },
@@ -111,7 +128,7 @@ class MainActivity : ComponentActivity() {
                     showHidden = showHidden,
                     inputs = inputs,
                     art = art,
-                    greeting = null,
+                    greeting = greeting,
                     heroLine = activeOverride?.heroLine,
                     lastInputAt = { lastInputAt.longValue },
                     galleryIdleMs = galleryIdleMs,
@@ -135,11 +152,17 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         unregisterReceiver(timeReceiver)
+        unregisterReceiver(screenReceiver)
         super.onDestroy()
     }
 
     override fun onResume() {
         super.onResume()
+        // The clock's delay is uptime-based, so after standby the mood may be stale: refresh now.
+        startMoodClock()
+        mood = moodClock.state()
+        if (shouldGreet(screenOffAt, SystemClock.elapsedRealtime())) showGreeting()
+        screenOffAt = null
         // Coming back from an app counts as activity: no gallery the moment you return.
         lastInputAt.longValue = SystemClock.uptimeMillis()
         apps = sortByUse(apps)
@@ -159,6 +182,16 @@ class MainActivity : ComponentActivity() {
         showHidden = false
         apps = sortByUse(apps)
         if (profile.artFocus) loadArt() else art = null // free the painting's memory
+        showGreeting()
+    }
+
+    private fun showGreeting() {
+        greeting = greetingFor(mood.phase, profile.title)
+        greetingJob?.cancel()
+        greetingJob = lifecycleScope.launch {
+            delay(GREETING_MS)
+            greeting = null
+        }
     }
 
     // Draw from the disk cache first, then rescan packages only if something was installed,
