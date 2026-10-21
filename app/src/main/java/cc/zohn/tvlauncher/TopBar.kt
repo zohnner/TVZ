@@ -35,6 +35,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -60,11 +65,12 @@ fun TopBar(
     onOpenSettings: (action: String) -> Unit,
     onSwitchProfile: () -> Unit,
     onActionFocused: (label: String) -> Unit,
+    onToggleFastDay: () -> Unit,
     belowName: @Composable () -> Unit = {},
 ) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
         Column {
-            ProfileName(profile, onSwitchProfile, onActionFocused)
+            ProfileName(profile, onSwitchProfile, onActionFocused, onToggleFastDay)
             Spacer(Modifier.height(18.dp))
             belowName()
         }
@@ -91,7 +97,12 @@ fun TopBar(
 
 // The wordmark doubles as the profile switch: focus it (Up, then Left) and press OK.
 @Composable
-private fun ProfileName(profile: Profile, onSwitch: () -> Unit, onFocused: (String) -> Unit) {
+private fun ProfileName(
+    profile: Profile,
+    onSwitch: () -> Unit,
+    onFocused: (String) -> Unit,
+    onToggleFastDay: () -> Unit,
+) {
     val palette = LocalPalette.current
     var focused by remember { mutableStateOf(false) }
     // Re-announce after a switch: focus stays here, so onFocusChanged doesn't fire again.
@@ -104,9 +115,18 @@ private fun ProfileName(profile: Profile, onSwitch: () -> Unit, onFocused: (Stri
         fontWeight = FontWeight.SemiBold,
         fontSize = 26.sp,
         letterSpacing = 8.sp,
-        color = if (focused) palette.glow else palette.accent,
+        color = if (focused) palette.glow else palette.wordmark,
         modifier = Modifier
             .onFocusChanged { focused = it.isFocused }
+            // Debug: hold Menu on the name to play a whole day in two minutes.
+            .onPreviewKeyEvent {
+                if (it.key == Key.Menu && it.type == KeyEventType.KeyDown && it.nativeKeyEvent.repeatCount == 1) {
+                    onToggleFastDay()
+                    true
+                } else {
+                    it.key == Key.Menu
+                }
+            }
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -143,6 +163,7 @@ private fun Clock() {
     )
     Text(
         now.format(DateTimeFormatter.ofPattern("EEEE  ·  d MMMM")).uppercase(),
+        fontFamily = palette.data,
         fontSize = 15.sp,
         letterSpacing = 3.sp,
         color = palette.accent.copy(alpha = 0.85f),
@@ -163,6 +184,7 @@ private fun WeatherLine() {
     weather?.let {
         Text(
             "${it.tempF}°F  ·  ${it.summary}".uppercase(),
+            fontFamily = palette.data,
             fontSize = 15.sp,
             letterSpacing = 3.sp,
             color = palette.text.copy(alpha = 0.8f),

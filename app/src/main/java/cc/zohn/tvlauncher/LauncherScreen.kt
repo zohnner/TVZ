@@ -38,6 +38,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Text
+import cc.zohn.tvlauncher.ui.theme.LauncherPalette
 import cc.zohn.tvlauncher.ui.theme.LocalPalette
 import kotlinx.coroutines.delay
 
@@ -54,6 +55,7 @@ class LauncherActions(
     val galleryShowing: (Boolean) -> Unit,
     val loadGallery: suspend () -> List<Artwork>,
     val galleryImage: suspend (Artwork) -> ImageBitmap?,
+    val toggleFastDay: () -> Unit,
 )
 
 /** Today's painting for an art-focused profile, ready to draw. */
@@ -72,18 +74,21 @@ private class FocusInfo {
 
 @Composable
 fun LauncherScreen(
+    palette: LauncherPalette,
+    mood: MoodState,
     profile: Profile,
     apps: List<AppEntry>,
     hidden: Set<String>,
     showHidden: Boolean,
     inputs: List<InputEntry>,
     art: DailyArt?,
+    greeting: String?,
+    heroLine: String?,
     lastInputAt: () -> Long,
     galleryIdleMs: Long,
     isResumed: () -> Boolean,
     actions: LauncherActions,
-) = CompositionLocalProvider(LocalPalette provides Moods.palette(profile.id, Phase.DAY)) {
-    val palette = LocalPalette.current
+) = CompositionLocalProvider(LocalPalette provides palette) {
     val focus = remember { FocusInfo() }
     var menuApp by remember { mutableStateOf<AppEntry?>(null) }
     var inputsOpen by remember { mutableStateOf(false) }
@@ -132,6 +137,7 @@ fun LauncherScreen(
                     onInputs = { inputsOpen = true },
                     onOpenSettings = actions.openSettings,
                     onSwitchProfile = actions.switchProfile,
+                    onToggleFastDay = actions.toggleFastDay,
                     onActionFocused = { focus.action = it },
                     // Under the name, where the screen is otherwise empty, so the hero keeps its width.
                     belowName = { if (art != null) ArtCard(art.artwork) },
@@ -201,6 +207,7 @@ private fun Hero(focus: FocusInfo, fallback: AppEntry?, hidden: Set<String>) {
                 app.packageName in hidden -> "Hidden  ·  hold OK for options"
                 else -> "Press OK to open  ·  hold for options"
             },
+            fontFamily = palette.data,
             fontSize = 18.sp,
             letterSpacing = 2.sp,
             color = palette.text.copy(alpha = 0.6f),
@@ -254,7 +261,12 @@ private fun ArtCard(art: Artwork) {
 
 @Composable
 private fun OrnamentDivider() {
-    val accent = LocalPalette.current.accent
+    val palette = LocalPalette.current
+    if (!palette.ornament) {
+        Spacer(Modifier.fillMaxWidth().height(16.dp))
+        return
+    }
+    val accent = palette.accent
     Canvas(Modifier.fillMaxWidth().height(16.dp)) {
         val y = size.height / 2
         val cx = size.width / 2

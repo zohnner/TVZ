@@ -1,7 +1,10 @@
 package cc.zohn.tvlauncher
 
 import android.content.ActivityNotFoundException
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.net.Uri
 import android.os.Bundle
 import android.os.SystemClock
@@ -16,6 +19,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import cc.zohn.tvlauncher.ui.theme.TvzTheme
@@ -42,12 +46,31 @@ class MainActivity : ComponentActivity() {
     private var refreshJob: Job? = null
     private var artJob: Job? = null
     private var keepAwakeJob: Job? = null
+    private val moodClock = MoodClock()
+    private var mood by mutableStateOf(moodClock.state())
+    private var themeOverride by mutableStateOf<ThemeOverride?>(null)
+    private var moodJob: Job? = null
+    // Time/zone/date changes invalidate the sun maths: restart the clock.
+    private val timeReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) = startMoodClock()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = LauncherPrefs(this)
         profile = prefs.activeProfile
         hidden = prefs.hidden(profile)
+        startMoodClock()
+        ContextCompat.registerReceiver(
+            this,
+            timeReceiver,
+            IntentFilter().apply {
+                addAction(Intent.ACTION_TIME_CHANGED)
+                addAction(Intent.ACTION_TIMEZONE_CHANGED)
+                addAction(Intent.ACTION_DATE_CHANGED)
+            },
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
 
         // This is the Home screen: Back has nowhere to go.
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -68,17 +91,27 @@ class MainActivity : ComponentActivity() {
             galleryShowing = ::keepAwakeForGallery,
             loadGallery = { ArtRepository.gallery() },
             galleryImage = { ArtRepository.image(this, it) },
+            toggleFastDay = {
+                moodClock.setFastDay(!moodClock.fastDay)
+                Toast.makeText(this, if (moodClock.fastDay) "Fast day on" else "Fast day off", Toast.LENGTH_SHORT).show()
+                startMoodClock()
+            },
         )
         val galleryIdleMs = galleryIdleMs()
         setContent {
             TvzTheme(isInDarkTheme = true) {
+                val activeOverride = themeOverride?.takeIf { it.activeAt(moodClock.now()) }
                 LauncherScreen(
+                    palette = activeOverride?.palette ?: Moods.effective(profile.id, mood),
+                    mood = mood,
                     profile = profile,
                     apps = apps.filter { showHidden || it.packageName !in hidden },
                     hidden = hidden,
                     showHidden = showHidden,
                     inputs = inputs,
                     art = art,
+                    greeting = null,
+                    heroLine = activeOverride?.heroLine,
                     lastInputAt = { lastInputAt.longValue },
                     galleryIdleMs = galleryIdleMs,
                     isResumed = { lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) },
@@ -86,6 +119,16 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    private fun startMoodClock() {
+        moodJob?.cancel()
+        moodJob = lifecycleScope.launch { moodClock.run { mood = it } }
+    }
+
+    override fun onDestroy() {
+        unregisterReceiver(timeReceiver)
+        super.onDestroy()
     }
 
     override fun onResume() {

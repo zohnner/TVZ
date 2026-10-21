@@ -125,13 +125,13 @@ private fun DockTile(
             // Bloom: stacked rounded rects fading outward, kept inside the dock's padding so it
             // isn't clipped. (Cheaper on the Mali-G31 than an animated shadow.)
             .drawBehind {
-                if (glow > 0f) {
+                if (glow > 0f && palette.glowStrength > 0f) {
                     val steps = 8
                     val spread = 18.dp.toPx()
                     for (i in steps downTo 1) {
                         val grow = spread * i / steps
                         drawRoundRect(
-                            color = palette.glow.copy(alpha = 0.07f * glow),
+                            color = palette.glow.copy(alpha = 0.07f * glow * palette.glowStrength),
                             topLeft = Offset(-grow, -grow),
                             size = Size(size.width + grow * 2, size.height + grow * 2),
                             cornerRadius = CornerRadius(10.dp.toPx() + grow),
