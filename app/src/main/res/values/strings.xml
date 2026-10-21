@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Zohn TV</string>
+    <string name="home_redirect_label">Zohn TV Home button</string>
+    <string name="home_redirect_description">Opens Zohn TV when you press Home. Turn this off to go back to the stock Google TV home screen.</string>
+</resources>
