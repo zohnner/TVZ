@@ -19,6 +19,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -32,6 +33,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -94,6 +98,9 @@ fun LauncherScreen(
     var inputsOpen by remember { mutableStateOf(false) }
     var refocusDock by remember { mutableIntStateOf(0) }
     var galleryOn by remember(profile) { mutableStateOf(false) }
+    // The divider's vertical center as a fraction of the screen: Zohn's horizon sits on it.
+    var horizonFraction by remember { mutableFloatStateOf(0.6f) }
+    var screenHeight by remember { mutableFloatStateOf(0f) }
 
     // Art-focused profiles turn into a gallery wall after a stretch of no remote input.
     if (profile.artFocus) {
@@ -111,6 +118,7 @@ fun LauncherScreen(
         Modifier
             .fillMaxSize()
             .background(palette.background)
+            .onSizeChanged { screenHeight = it.height.toFloat() }
             .onPreviewKeyEvent {
                 actions.onInput()
                 false
@@ -126,8 +134,9 @@ fun LauncherScreen(
         } else {
             BackgroundLayers(
                 profile = profile,
+                mood = mood,
                 artwork = art?.image,
-                focusedBackdrop = { focus.app?.backdrop },
+                horizonFraction = horizonFraction,
                 lastInputAt = lastInputAt,
             )
             Column(Modifier.fillMaxSize().padding(horizontal = 64.dp, vertical = 36.dp)) {
@@ -145,7 +154,13 @@ fun LauncherScreen(
                 Spacer(Modifier.weight(1f))
                 Hero(focus, fallback = apps.firstOrNull(), hidden = hidden)
                 Spacer(Modifier.height(20.dp))
-                OrnamentDivider()
+                Box(
+                    Modifier.onGloballyPositioned {
+                        if (screenHeight > 0f) {
+                            horizonFraction = (it.positionInRoot().y + it.size.height / 2f) / screenHeight
+                        }
+                    }
+                ) { OrnamentDivider() }
                 Dock(
                     apps = apps,
                     hidden = hidden,
