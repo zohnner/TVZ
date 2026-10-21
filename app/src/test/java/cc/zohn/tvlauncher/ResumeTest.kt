@@ -1,5 +1,6 @@
 package cc.zohn.tvlauncher
 
+import android.media.session.PlaybackState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -60,6 +61,37 @@ class ResumeTest {
     @Test fun subtitleHours() {
         assertEquals("Peacock · 1 h 5 min in", resumeSubtitle("Peacock", 65 * 60_000))
         assertEquals("Peacock · 2 h in", resumeSubtitle("Peacock", 120 * 60_000))
+    }
+
+    @Test fun stopAndIdleStatesHaveNoUsablePosition() {
+        assertTrue(hasUsablePosition(PlaybackState.STATE_PLAYING, 1_000))
+        assertTrue(hasUsablePosition(PlaybackState.STATE_PAUSED, 0))
+        assertTrue(hasUsablePosition(PlaybackState.STATE_BUFFERING, 5_000))
+        assertFalse(hasUsablePosition(PlaybackState.STATE_PAUSED, -1))
+        assertFalse(hasUsablePosition(PlaybackState.STATE_STOPPED, 2_640_000))
+        assertFalse(hasUsablePosition(PlaybackState.STATE_NONE, 0))
+        assertFalse(hasUsablePosition(PlaybackState.STATE_ERROR, 10_000))
+    }
+
+    @Test fun bufferingAndSeekingStayInThePlayingRun() {
+        for (s in listOf(
+            PlaybackState.STATE_PLAYING, PlaybackState.STATE_BUFFERING, PlaybackState.STATE_CONNECTING,
+            PlaybackState.STATE_FAST_FORWARDING, PlaybackState.STATE_REWINDING,
+            PlaybackState.STATE_SKIPPING_TO_NEXT, PlaybackState.STATE_SKIPPING_TO_PREVIOUS,
+        )) assertTrue("$s", isPlaybackRun(s))
+        for (s in listOf(PlaybackState.STATE_PAUSED, PlaybackState.STATE_STOPPED, PlaybackState.STATE_NONE, PlaybackState.STATE_ERROR)) {
+            assertFalse("$s", isPlaybackRun(s))
+        }
+    }
+
+    @Test fun extrapolatesWhilePlaying() {
+        assertEquals(70_000, extrapolatePosition(60_000, elapsedMs = 10_000, speed = 1f, durationMs = null))
+        assertEquals(80_000, extrapolatePosition(60_000, elapsedMs = 10_000, speed = 2f, durationMs = null))
+    }
+
+    @Test fun extrapolationClampsToDurationAndIgnoresNegativeElapsed() {
+        assertEquals(100_000, extrapolatePosition(95_000, elapsedMs = 60_000, speed = 1f, durationMs = 100_000))
+        assertEquals(60_000, extrapolatePosition(60_000, elapsedMs = -5_000, speed = 1f, durationMs = null))
     }
 
     @Test fun positionTextAlone() {

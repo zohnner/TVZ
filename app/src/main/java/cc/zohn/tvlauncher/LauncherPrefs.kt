@@ -10,6 +10,7 @@ import org.json.JSONObject
 private const val KEY_HIDDEN = "hidden"
 private const val KEY_RESUMES = "resumes"
 private const val KEY_NEVER_TRACK = "neverTrack"
+private const val DISMISSED_PREFIX = "resumeDismissed:"
 private const val KEY_PACKAGE_SEQ = "pkgSeq"
 private const val KEY_BOOT_COUNT = "bootCount"
 private const val KEY_PROFILE = "profile"
@@ -53,8 +54,15 @@ class LauncherPrefs(context: Context) {
 
     fun recordResume(profile: Profile, entry: ResumeEntry) = setResumes(profile, upsert(resumes(profile), entry))
 
-    fun dismissResume(profile: Profile, packageName: String) =
+    // The dismissal time keeps a write that was captured earlier (and is still waiting out the
+    // listener's 30 s gap) from bringing the tile back.
+    fun dismissResume(profile: Profile, packageName: String) {
+        prefs.edit().putLong(key(profile, DISMISSED_PREFIX + packageName), System.currentTimeMillis()).apply()
         setResumes(profile, resumes(profile).filter { it.packageName != packageName })
+    }
+
+    fun resumeDismissedAt(profile: Profile, packageName: String): Long =
+        prefs.getLong(key(profile, DISMISSED_PREFIX + packageName), 0L)
 
     // Apps the profile never wants a Resume tile for (nothing is recorded for them either).
     fun neverTrack(profile: Profile): Set<String> =

@@ -14,6 +14,7 @@ import android.util.Log
 
 private const val TAG = "TvLauncher"
 private const val MIN_WRITE_GAP_MS = 30_000L
+private const val PERIODIC_SAVE_MS = 5 * 60_000L
 
 /**
  * Records what's playing for the Resume tiles, from other apps' media sessions (the TV's Watch
@@ -40,7 +41,8 @@ class ResumeProbeListener : NotificationListenerService() {
             sessionManager = manager
             sync(manager.getActiveSessions(component))
             manager.addOnActiveSessionsChangedListener(sessionsListener, component, handler)
-        } catch (e: SecurityException) {
+        } catch (e: RuntimeException) {
+            // SecurityException without notification access; anything else must not crash the service.
             Log.w(TAG, "resume: no media session access", e)
         }
     }
@@ -83,19 +85,32 @@ class ResumeProbeListener : NotificationListenerService() {
     private fun writePending(pkg: String) {
         val (profile, entry) = pending.remove(pkg) ?: return
         lastWriteAt[pkg] = SystemClock.elapsedRealtime()
-        if (pkg in prefs.neverTrack(profile)) return
+        if (pkg in prefs.neverTrack(profile) || entry.watchedAt <= prefs.resumeDismissedAt(profile, pkg)) return
         prefs.recordResume(profile, entry)
         Log.i(TAG, "resume: $pkg \"${entry.title}\" at ${entry.positionMs / 1000}s for ${profile.id}")
     }
 
+    /**
+     * One media session. Playing time counts only while PLAYING, per title. Saves happen when a
+     * playing run ends (pause/stop; buffering and seeking don't count), when the title changes
+     * (for the old title), at the 2-minute mark, and every 5 min while playing (a TV switched off
+     * mid-show never sends a pause).
+     */
     private inner class Tracked(private val controller: MediaController) : MediaController.Callback() {
         private val pkg = controller.packageName
-        private var lastState: PlaybackState? = null
+        // Last state with a real position; STOPPED/NONE often report 0.
+        private var lastGood: PlaybackState? = null
+        private var inRun = false
         private var playingSince: Long? = null
         private var playedMs = 0L
         private var title = titleOf(controller.metadata)
         private var durationMs = durationOf(controller.metadata)
-        private val thresholdReached = Runnable { save() }
+        private val tick = object : Runnable {
+            override fun run() {
+                save()
+                scheduleTick()
+            }
+        }
 
         fun start() {
             controller.registerCallback(this, handler)
@@ -109,24 +124,38 @@ class ResumeProbeListener : NotificationListenerService() {
         }
 
         override fun onPlaybackStateChanged(state: PlaybackState?) {
-            lastState = state
-            val playing = state?.state == PlaybackState.STATE_PLAYING
-            if (playing == (playingSince != null)) return // position tick
-            if (playing) {
+            val s = state?.state ?: PlaybackState.STATE_NONE
+            if (state != null && hasUsablePosition(s, state.position)) lastGood = state
+            val playing = s == PlaybackState.STATE_PLAYING
+            if (playing && playingSince == null) {
                 playingSince = SystemClock.elapsedRealtime()
-                if (!shouldRecord(playedMs)) handler.postDelayed(thresholdReached, RECORD_AFTER_MS - playedMs)
-            } else {
+                scheduleTick()
+            } else if (!playing && playingSince != null) {
                 stopCounting()
-                save() // paused / stopped
             }
+            val wasInRun = inRun
+            inRun = isPlaybackRun(s)
+            if (wasInRun && !inRun) save() // paused / stopped
         }
 
         override fun onMetadataChanged(metadata: MediaMetadata?) {
-            durationMs = durationOf(metadata)
-            val newTitle = titleOf(metadata)
-            if (newTitle != title) {
+            // Teardown and episode switches can send empty metadata: keep what we know.
+            val newDuration = durationOf(metadata)
+            val newTitle = titleOf(metadata) ?: run { if (newDuration != null) durationMs = newDuration; return }
+            if (title == null || newTitle == title) {
                 title = newTitle
-                save() // next episode
+                if (newDuration != null) durationMs = newDuration
+                return
+            }
+            // Next episode: the old one is saved where it ended; the new one earns its own 2 minutes.
+            save()
+            title = newTitle
+            durationMs = newDuration
+            lastGood = null
+            playedMs = 0
+            if (playingSince != null) {
+                playingSince = SystemClock.elapsedRealtime()
+                scheduleTick()
             }
         }
 
@@ -135,8 +164,16 @@ class ResumeProbeListener : NotificationListenerService() {
             end()
         }
 
+        // Next save while playing: at the 2-minute mark, then every 5 min.
+        private fun scheduleTick() {
+            handler.removeCallbacks(tick)
+            if (playingSince == null) return
+            val played = played()
+            handler.postDelayed(tick, if (shouldRecord(played)) PERIODIC_SAVE_MS else RECORD_AFTER_MS - played)
+        }
+
         private fun stopCounting() {
-            handler.removeCallbacks(thresholdReached)
+            handler.removeCallbacks(tick)
             playingSince?.let { playedMs += SystemClock.elapsedRealtime() - it }
             playingSince = null
         }
@@ -145,7 +182,7 @@ class ResumeProbeListener : NotificationListenerService() {
 
         private fun save() {
             if (!shouldRecord(played())) return
-            val entry = ResumeEntry(pkg, title, positionNow(lastState), durationMs, System.currentTimeMillis())
+            val entry = ResumeEntry(pkg, title, positionNow(lastGood, durationMs), durationMs, System.currentTimeMillis())
             requestWrite(prefs.activeProfile, entry)
         }
     }
@@ -159,8 +196,8 @@ private fun durationOf(m: MediaMetadata?): Long? =
     m?.getLong(MediaMetadata.METADATA_KEY_DURATION)?.takeIf { it > 0 }
 
 // PlaybackState.position is as of lastPositionUpdateTime; extrapolate while playing.
-private fun positionNow(s: PlaybackState?): Long {
-    if (s == null || s.position < 0) return 0
+private fun positionNow(s: PlaybackState?, durationMs: Long?): Long {
+    if (s == null) return 0
     if (s.state != PlaybackState.STATE_PLAYING) return s.position
-    return s.position + ((SystemClock.elapsedRealtime() - s.lastPositionUpdateTime) * s.playbackSpeed).toLong()
+    return extrapolatePosition(s.position, SystemClock.elapsedRealtime() - s.lastPositionUpdateTime, s.playbackSpeed, durationMs)
 }
