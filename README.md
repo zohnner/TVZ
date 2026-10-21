@@ -1,7 +1,7 @@
 # Zohn TV — custom Google TV launcher
 
 A personal home-screen launcher (`cc.zohn.tvlauncher`) for one specific TV, sideloaded via
-Developer Mode. Kotlin + Jetpack Compose (Compose for TV). Baroque-futurist, gold-on-black look.
+Developer Mode. Kotlin + Jetpack Compose (Compose for TV). Moods through the day: each profile's look follows Kansas City's sunrise and sunset.
 
 **Read before changing anything:** [RULES.md](RULES.md) (hard rules + amendments) and
 [DESIGN.md](DESIGN.md) (look, layout, and the performance rules the design depends on).
@@ -11,7 +11,7 @@ Developer Mode. Kotlin + Jetpack Compose (Compose for TV). Baroque-futurist, gol
 Working on the TV:
 - Lists every TV app (`LEANBACK_LAUNCHER` query), launches it, Back returns to the launcher.
 - **Is the Home screen**: boots into Zohn TV, and the remote's Home button lands here (see "Home button" below).
-- Hero + dock layout, gold focus glow, Cinzel clock/date, blurred backdrop of the focused app, slow gold/oxblood drift.
+- Hero + dock layout, focus glow, clock/date/weather, per-profile look (see DESIGN.md).
 - Dock sorted by most-used (launches from Zohn TV only), app list cached on disk for ~1 s cold start.
 - Hold OK (or Menu) on a tile → Hide / App info / Show hidden apps.
 - Quick-action row under the clock (press Up from the dock): Inputs (HDMI 1–3, verified switching), Wi-Fi, Bluetooth, Settings.
@@ -20,7 +20,18 @@ Working on the TV:
   apps; the TV opens in whoever used it last. Sydney's is art-focused: today's Impressionist painting
   as wallpaper, a museum-label card with a fact, and an idle gallery wall. See DESIGN.md.
 - Weather line for Kansas City, MO (°F, Open-Meteo, no key; `WEATHER_CITY` in `Weather.kt`).
-- The background drift pauses while the remote is in use and resumes after 2 s idle.
+- **Moods:** four phases (morning, day, evening, night) timed by Kansas City's sunrise and sunset, with
+  45-minute blends between them. Night is a low-glare dark mode for both profiles.
+- **Zohn's Sunset grid:** purple + orange synthwave sky, striped sun that tracks the real sun, horizon on
+  the divider, perspective grid that scrolls while idle (static at night).
+- **Sydney's phase paintings:** a different Impressionist painting per phase, chosen by subject
+  (dawn, garden, sunset, night); night dims the painting and lightens the text.
+- **Greeting on wake:** "Good morning, {name}" etc. for ~4 s when the launcher shows right after the TV
+  slept 30+ minutes, and on profile switch. Any key skips it.
+- **Usage log:** every dock launch is appended to `files/usage.log` (time, weekday, hour, phase, profile,
+  package; 90 days kept). Nothing reads it yet; it's for the planned Habits feature.
+- **Fast-day debug:** hold Menu on the profile name to play a whole day in ~2 minutes (toast "Fast day on/off").
+- The grid scroll pauses while the remote is in use and resumes after 2 s idle.
 
 Not done / open:
 - **Wallpaper** image: Zohn will supply one; a gradient placeholder is drawn in `Background.kt`.
@@ -32,8 +43,15 @@ Not done / open:
 | File | What it does |
 |---|---|
 | `MainActivity.kt` | State (apps, hidden, inputs), refresh-from-cache logic, launching, sorting by use |
-| `LauncherScreen.kt` | Screen composition: background, top bar, hero, ornament divider, dock, dialogs |
-| `Background.kt` | Pre-rendered background layers (see Performance) |
+| `LauncherScreen.kt` | Screen composition: background, top bar, hero, divider, dock, dialogs |
+| `Background.kt` | Background layers: Zohn's scene + grid, Sydney's painting + mist (see DESIGN.md Performance) |
+| `SunCalc.kt` | NOAA solar math: sunrise, sunset, sun elevation (pure Kotlin) |
+| `Mood.kt` | Phase boundaries from sun times, blend windows, `MoodState` |
+| `MoodClock.kt` | Ticking mood state (phase, blend, sun elevation), fast-day debug |
+| `Moods.kt` | Phase palettes per profile and `blend()` |
+| `SunsetScene.kt` | Renders Zohn's sky/sun/horizon scene and grid floor bitmaps |
+| `Greeting.kt` | Wake detection and greeting text |
+| `UsageLog.kt` | Launch history file for the Habits feature |
 | `TopBar.kt` | Wordmark, clock, weather line, quick-action buttons |
 | `Dock.kt` | App row; tile focus visuals; OK vs. hold-OK/Menu key handling |
 | `Menus.kt` | App menu and input picker dialogs |
@@ -46,8 +64,11 @@ Not done / open:
 | `Art.kt` | Art Institute of Chicago fetch: daily painting, gallery set, image cache, facts |
 | `Gallery.kt` | Sydney's idle gallery wall |
 | `Http.kt` | Shared HTTP helpers (JSON GET, file download) |
-| `ui/theme/Palette.kt` | `LauncherPalette` per profile (`LocalPalette`), Playfair font |
-| `ui/theme/Baroque.kt` | Zohn's colors + Cinzel font |
+| `ui/theme/Palette.kt` | `LauncherPalette` fields + fonts (`LocalPalette`); phase palettes live in `Moods.kt` |
+
+## Tests
+
+`./gradlew.bat testDebugUnitTest` (JVM unit tests: SunCalc, Mood, Moods, art subjects, greeting, usage log).
 
 ## Build & deploy
 

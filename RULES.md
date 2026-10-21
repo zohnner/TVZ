@@ -40,3 +40,4 @@ These supersede the original rules above where they conflict.
 - **Rules 6/7 (Home button):** Google TV ignores the HOME role for the Home key. Approved fix: an accessibility service in this app (`HomeRedirectService`) that redirects from the stock launcher's home screen. The stock launcher stays installed and enabled. Revert stays one step: uninstall, or turn the service off in Accessibility.
 - **Rule 6, clarified:** "Never disable" now has no exception. Never disable/uninstall the stock launcher, even after the reboot test passed.
 - **Repo:** the Android project lives in this repo (TVZ). An older copy at `C:\Users\zohnw\AndroidStudioProjects\tvz` is stale; don't edit it.
+- **Sports (2026-10-20):** Zohn promoted game-day mode for his profile (Chiefs, Royals, Mizzou) into scope; its own spec follows the moods work. His profile uses two hues only (purple + orange); team colors replace them on game days, nothing is added.
