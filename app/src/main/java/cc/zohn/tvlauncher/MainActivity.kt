@@ -61,7 +61,8 @@ class MainActivity : ComponentActivity() {
             val now = SystemClock.elapsedRealtime()
             when (intent.action) {
                 Intent.ACTION_SCREEN_OFF, Intent.ACTION_DREAMING_STARTED -> if (screenOffAt == null) screenOffAt = now
-                else -> {
+                // A duplicate wake broadcast (SCREEN_ON + DREAMING_STOPPED) must not discard the first.
+                else -> if (screenOffAt != null) {
                     wakeQualified = shouldGreet(screenOffAt, now)
                     wokeAt = now
                     screenOffAt = null
